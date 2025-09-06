@@ -6298,7 +6298,7 @@ WGPUSampler wgpuDeviceCreateSampler(WGPUDevice device, const WGPUSamplerDescript
     return ret;
     EXIT();
 }
-void wgpuRenderPassEncoderSetVertexBuffer(WGPURenderPassEncoder rpe, uint32_t binding, WGPUBuffer buffer, VkDeviceSize offset, uint64_t size) {
+void wgpuRenderPassEncoderSetVertexBuffer(WGPURenderPassEncoder rpe, uint32_t binding, WGPUBuffer buffer, size_t offset, uint64_t size) {
     ENTRY();
     wgvk_assert(rpe != NULL, "RenderPassEncoderHandle is null");
     wgvk_assert(buffer != NULL, "BufferHandle is null");

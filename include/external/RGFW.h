@@ -8308,6 +8308,7 @@ typedef const char* NSPasteboardType;
 typedef unsigned long NSUInteger;
 typedef long NSInteger;
 typedef NSInteger NSModalResponse;
+typedef void NSView;
 
 #ifdef __arm64__
 	/* ARM just uses objc_msgSend */
@@ -9999,8 +10000,6 @@ WGPUSurface RGFW_window_createSurface_WebGPU(RGFW_window* window, WGPUInstance i
 
     ((void (*)(id, SEL, BOOL))objc_msgSend)((id)nsView, sel_registerName("setWantsLayer:"), YES);
     id layer = ((id (*)(id, SEL))objc_msgSend)((id)nsView, sel_registerName("layer"));
-
-    id layer = ((id (*)(id, SEL))objc_msgSend)((id)nsView, sel_registerName("layer"));
 	void* metalLayer = RGFW_cocoaGetLayer();
 	if (metalLayer == NULL) {
 		 return NULL;
@@ -10011,7 +10010,8 @@ WGPUSurface RGFW_window_createSurface_WebGPU(RGFW_window* window, WGPUInstance i
     /* At this point, 'layer' should be a valid CAMetalLayer* */
     WGPUSurfaceSourceMetalLayer fromMetal = {0};
     fromMetal.chain.sType = WGPUSType_SurfaceSourceMetalLayer;
-    fromMetal.layer = (__bridge CAMetalLayer*)layer; /* Use __bridge for ARC compatibility if mixing C/Obj-C */
+    // fromMetal.layer = (__bridge CAMetalLayer*)layer; /* Use __bridge for ARC compatibility if mixing C/Obj-C */
+    fromMetal.layer = layer;
 
     surfaceDesc.nextInChain = (WGPUChainedStruct*)&fromMetal.chain;
     return wgpuInstanceCreateSurface(instance, &surfaceDesc);
