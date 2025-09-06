@@ -29,10 +29,10 @@ typedef struct wgpu_base{
 #  if SUPPORT_WAYLAND_SURFACE == 1
 #    define GLFW_EXPOSE_NATIVE_WAYLAND
 #  endif
-#  ifdef _GLFW_COCOA
+#  if SUPPORT_METAL_SURFACE == 1
 #    define GLFW_EXPOSE_NATIVE_COCOA
 #  endif
-#  ifdef _WIN32
+#  if SUPPORT_WIN32_SURFACE == 1 || defined(_WIN32) 
 #    define GLFW_EXPOSE_NATIVE_WIN32
 #  endif
 #endif // __EMSCRIPTEN__
