@@ -4624,13 +4624,21 @@ void wgpuSurfaceGetCapabilities(WGPUSurface wgpuSurface, WGPUAdapter adapter, WG
     uint32_t presentModeCount = 0;
     vkGetPhysicalDeviceSurfacePresentModesKHR(vk_physicalDevice, surface, &presentModeCount, NULL);
     if (presentModeCount != 0 && wgpuSurface->presentModeCache == NULL) {
-        wgpuSurface->presentModeCache = (WGPUPresentMode*)RL_CALLOC(presentModeCount, sizeof(WGPUPresentMode));
-        VkPresentModeKHR presentModes[32] = {0};//(presentModeCount);
+        uint32_t wgpuCompatiblePresentModeCount = 0;
+        VkPresentModeKHR presentModes[32] = {0};
         vkGetPhysicalDeviceSurfacePresentModesKHR(vk_physicalDevice, surface, &presentModeCount, presentModes);
+
         for(size_t i = 0;i < presentModeCount;i++){
-            wgpuSurface->presentModeCache[i] = fromVulkanPresentMode(presentModes[i]);
+            wgpuCompatiblePresentModeCount += fromVulkanPresentMode(presentModes[i]) != (WGPUPresentMode)~0;
         }
-        wgpuSurface->presentModeCount = presentModeCount;
+        wgpuSurface->presentModeCache = (WGPUPresentMode*)RL_CALLOC(wgpuCompatiblePresentModeCount, sizeof(WGPUPresentMode));
+        uint32_t insertIndex = 0;
+        for(size_t i = 0;i < presentModeCount;i++){
+            if(fromVulkanPresentMode(presentModes[i]) != (WGPUPresentMode)~0){
+                wgpuSurface->presentModeCache[insertIndex++] = fromVulkanPresentMode(presentModes[i]);
+            }
+        }
+        wgpuSurface->presentModeCount = wgpuCompatiblePresentModeCount;
     }
     wgpuSurface->capabilityCache.presentModeCount = wgpuSurface->presentModeCount;
     wgpuSurface->capabilityCache.formatCount = wgpuSurface->wgpuFormatCount;
