@@ -2917,9 +2917,27 @@ static inline VkComponentSwizzle toVkSwizzleComponent(WGPUComponentSwizzle wgpuS
         abort();
     }
 }
-
+static inline WGPUTextureViewDimension toViewDim_(WGPUTextureDimension dim){
+    if(dim == WGPUTextureDimension_1D)return WGPUTextureViewDimension_1D;
+    if(dim == WGPUTextureDimension_2D)return WGPUTextureViewDimension_2D;
+    if(dim == WGPUTextureDimension_3D)return WGPUTextureViewDimension_3D;
+    return WGPUTextureViewDimension_Undefined;
+}
 WGPUTextureView wgpuTextureCreateView(WGPUTexture texture, const WGPUTextureViewDescriptor *descriptor){
     ENTRY();
+    if(descriptor == NULL){
+        WGPUTextureViewDescriptor tvDesc = {
+            .format = fromVulkanPixelFormat(texture->format),
+            .dimension = toViewDim_(fromVulkanTextureDimension(texture->dimension)),
+            .baseMipLevel = 0,
+            .mipLevelCount = texture->mipLevels,
+            .baseArrayLayer = 0,
+            .arrayLayerCount = texture->depthOrArrayLayers,
+            .aspect = WGPUTextureAspect_All,
+            .usage = texture->usage
+        };
+        return wgpuTextureCreateView(texture, &tvDesc);
+    }
     VkComponentMapping swizzle = {
         .r = VK_COMPONENT_SWIZZLE_IDENTITY,
         .g = VK_COMPONENT_SWIZZLE_IDENTITY,
@@ -7360,18 +7378,46 @@ void wgpuAdapterGetFeatures(WGPUAdapter adapter, WGPUSupportedFeatures* features
     memcpy((void*)features->features, supported_features, count * sizeof(WGPUFeatureName));
     EXIT();
 }
-WGPUStatus wgpuAdapterGetInfo(WGPUAdapter adapter, WGPUAdapterInfo * info) {                                                                              ENTRY();
-return WGPUStatus_Error;                                                                              EXIT();
-                                                                                                       }
-WGPUBool wgpuAdapterHasFeature(WGPUAdapter adapter, WGPUFeatureName feature) {                                                                                ENTRY();
-return 0;                                                                                EXIT();
-                                                                                          }
+WGPUStatus wgpuAdapterGetInfo(WGPUAdapter adapter, WGPUAdapterInfo* info) {
+    ENTRY();
+    if (!adapter || !info) {
+        EXIT();
+        return WGPUStatus_Error;
+    }
+    
+    // Query Vulkan for the physical device properties.
+    VkPhysicalDeviceProperties props;
+    vkGetPhysicalDeviceProperties(adapter->physicalDevice, &props);
+
+    info->vendorID = props.vendorID;
+    info->deviceID = props.deviceID;
+    info->device = (WGPUStringView){adapter->cachedDeviceName, WGPU_STRLEN};
+    info->description = (WGPUStringView){"?", 1};
+    info->architecture = (WGPUStringView){"?", 1};
+
+    // Map the Vulkan device type to the corresponding WGPU adapter type.
+    switch (props.deviceType) {
+        case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU: info->adapterType = WGPUAdapterType_IntegratedGPU; break;
+        case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU:   info->adapterType = WGPUAdapterType_DiscreteGPU;   break;
+        case VK_PHYSICAL_DEVICE_TYPE_CPU:            info->adapterType = WGPUAdapterType_CPU;           break;
+        default:                                     info->adapterType = WGPUAdapterType_Unknown;       break;
+    }
+
+    EXIT();
+    return WGPUStatus_Success;
+}
+
+WGPUBool wgpuAdapterHasFeature(WGPUAdapter adapter, WGPUFeatureName feature) {
+    ENTRY();
+    EXIT();
+    return 0;
+}
 
 // Stubs for missing Methods of BindGroup
 void wgpuBindGroupSetLabel(WGPUBindGroup bindGroup, WGPUStringView label) {
-     ENTRY();
+    ENTRY();
 
-     EXIT();
+    EXIT();
 }
 
 // Stubs for missing Methods of BindGroupLayout

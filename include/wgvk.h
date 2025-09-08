@@ -1371,16 +1371,12 @@ typedef struct WGPUCommandEncoderDescriptor{
     WGPUStringView label;
 }WGPUCommandEncoderDescriptor;
 
-typedef struct Extent3D{
-    uint32_t width, height, depthOrArrayLayers;
-}Extent3D;
-
 typedef struct WGPUTextureDescriptor{
     WGPUChainedStruct* nextInChain;
     WGPUStringView label;
     WGPUTextureUsage usage;
     WGPUTextureDimension dimension;
-    Extent3D size;
+    WGPUExtent3D size;
     WGPUTextureFormat format;
     uint32_t mipLevelCount;
     uint32_t sampleCount;
