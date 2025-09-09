@@ -1264,8 +1264,11 @@ WGPUInstance wgpuCreateInstance(const WGPUInstanceDescriptor* descriptor) {
         return NULL;
     }
 
-    int needsPortabilityEnumeration = 0;
-    int portabilityEnumerationAvailable = 0;
+    int needsPortabilityEnumeration = 1;
+    #ifdef __APPLE__    
+    needsPortabilityEnumeration = 1;
+    #endif
+    int portabilityEnumerationAvailable = 1;
 
     // Iterate through available extensions and enable the desired ones
     uint32_t enabledExtensionCount = 0;
@@ -1697,7 +1700,7 @@ WGPUDevice wgpuAdapterCreateDevice(WGPUAdapter adapter, const WGPUDeviceDescript
     int depthClipControl_Found = 0;
     int depthClipEnable_Found = 0;
 
-    const char* deviceExtensionsFound[deviceExtensionsToLookForCount + 1];
+    const char* deviceExtensionsFound[deviceExtensionsToLookForCount + 4];
     uint32_t extInsertIndex = 0;
     for(uint32_t i = 0;i < deviceExtensionsToLookForCount;i++){
         int deviceExtensionFound = 0;
@@ -1762,7 +1765,9 @@ WGPUDevice wgpuAdapterCreateDevice(WGPUAdapter adapter, const WGPUDeviceDescript
         adapter->rayTracingPipelineProperties    = (VkPhysicalDeviceRayTracingPipelinePropertiesKHR){0};
         adapter->accelerationStructureProperties = (VkPhysicalDeviceAccelerationStructurePropertiesKHR){0};
     }
-
+    #ifdef __APPLE__
+    deviceExtensionsFound[extInsertIndex++] = "VK_KHR_portability_subset";
+    #endif
     VkDeviceCreateInfo createInfo = {
         .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
         .pNext = &deviceFeatures,
