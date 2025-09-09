@@ -671,6 +671,7 @@ WGPUStatus wgpuDeviceGetAdapterInfo(WGPUDevice device, WGPUAdapterInfo* adapterI
 
     strncpy(device->adapter->cachedDeviceName, deviceProperties2.properties.deviceName, VK_MAX_PHYSICAL_DEVICE_NAME_SIZE);
     device->adapter->cachedDeviceName[VK_MAX_PHYSICAL_DEVICE_NAME_SIZE - 1] = '\0'; // Explicitly null-terminate
+    
 
     // Set the WGPUStringView to point to the stable, cached string.
     uint32_t len = strlen(device->adapter->cachedDeviceName);
@@ -4788,6 +4789,11 @@ void wgpuSurfaceConfigure(WGPUSurface surface, const WGPUSurfaceConfiguration* c
         surface->images[i]->refCount = 1;
         surface->images[i]->sampleCount = 1;
         surface->images[i]->image = tmpImages[i];
+        surface->images[i]->dimension = VK_IMAGE_TYPE_2D;
+        surface->images[i]->format = createInfo.imageFormat;
+        surface->images[i]->mipLevels = 1;
+        surface->images[i]->depthOrArrayLayers = 1;
+        surface->images[i]->refCount = 1;
 
         VkSemaphoreCreateInfo vci = {VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
         VkSemaphore createdSemaphore = VK_NULL_HANDLE;
@@ -6088,6 +6094,7 @@ void wgpuSurfaceGetCurrentTexture(WGPUSurface surface, WGPUSurfaceTexture* surfa
         }
         if(surfaceTexture->status == WGPUSurfaceGetCurrentTextureStatus_SuccessOptimal || surfaceTexture->status == WGPUSurfaceGetCurrentTextureStatus_SuccessSuboptimal){
             surfaceTexture->texture = surface->images[surface->activeImageIndex];
+            wgpuTextureAddRef(surface->images[surface->activeImageIndex]);
         }
     }
     else{
@@ -6239,7 +6246,7 @@ void wgpuDeviceTick(WGPUDevice device){
     uint32_t cacheIndex = device->submittedFrames % framesInFlight;
     PerframeCache* frameCacheMew = DeviceGetFIFCache(device, cacheIndex);
     PendingCommandBufferMap* pcmNew = &frameCacheMew->pendingCommandBuffers;
-    SyncState* syncStateMew = &frameCacheMew->syncState;
+    SyncState* syncStateNew = &frameCacheMew->syncState;
     size_t pcmSize = pcmNew->current_size;
 
     WGPUFenceVector fences;
@@ -6295,7 +6302,7 @@ void wgpuDeviceTick(WGPUDevice device){
 
     WGPUCommandEncoderDescriptor cedesc zeroinit;
     device->queue->presubmitCache = wgpuDeviceCreateCommandEncoder(device, &cedesc);
-    syncStateMew->submits = 0;
+    syncStateNew->submits = 0;
     EXIT();
 }
 
@@ -7433,10 +7440,12 @@ void wgpuBufferDestroy(WGPUBuffer buffer) {
 
      EXIT();
 }
-void const * wgpuBufferGetConstMappedRange(WGPUBuffer buffer, size_t offset, size_t size) {                                                                                             ENTRY();
-return NULL;                                                                                             EXIT();
-                                                                                                          }
-void * wgpuBufferGetMappedRange(WGPUBuffer buffer, size_t offset, size_t size) {
+const void* wgpuBufferGetConstMappedRange(WGPUBuffer buffer, size_t offset, size_t size) {
+    ENTRY();
+    EXIT();
+    return (const void*)((char*)buffer->mappedRange + offset);
+}
+void* wgpuBufferGetMappedRange(WGPUBuffer buffer, size_t offset, size_t size) {
     ENTRY();
     return (void*)((char*)buffer->mappedRange + offset);
     EXIT();
