@@ -149,7 +149,7 @@ WGPUShaderModule compileComputeModule(WGPUDevice device, const uint32_t* spirvCo
             .sType = WGPUSType_ShaderSourceSPIRV
         },
         .code = spirvCode,
-        .codeSize = sizeInBytes
+        .codeSize = sizeInBytes / sizeof(uint32_t)
     };
     
     WGPUShaderModuleDescriptor computeModuleDesc = {

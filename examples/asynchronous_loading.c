@@ -154,7 +154,7 @@ int main(){
             .sType = WGPUSType_ShaderSourceSPIRV
         },
         .code = binary_data,
-        .codeSize = sizeof(binary_data)
+        .codeSize = sizeof(binary_data) / sizeof(uint32_t)
     };
     WGPUShaderModuleDescriptor computeModuleDesc = {
         .nextInChain = &computeSourceSpirv.chain,

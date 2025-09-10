@@ -2777,7 +2777,7 @@ WGPUShaderModule wgpuDeviceCreateShaderModule(WGPUDevice device, const WGPUShade
                 VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
                 NULL,
                 0,
-                source->codeSize,
+                source->codeSize * 4,
                 source->code
             };
             device->functions.vkCreateShaderModule(device->device, &sCreateInfo, NULL, &ret->vulkanModuleMultiEP);
@@ -2851,12 +2851,12 @@ WGPUPipelineLayout wgpuDeviceCreatePipelineLayout(WGPUDevice device, const WGPUP
     ret->bindGroupLayouts = (WGPUBindGroupLayout*)RL_CALLOC(pldesc->bindGroupLayoutCount, sizeof(void*));
     if(pldesc->bindGroupLayoutCount > 0)
         memcpy((void*)ret->bindGroupLayouts, (void*)pldesc->bindGroupLayouts, pldesc->bindGroupLayoutCount * sizeof(void*));
-    VkDescriptorSetLayout dslayouts[8] zeroinit;
+    VkDescriptorSetLayout dslayouts[8] = {0};
     for(uint32_t i = 0;i < ret->bindGroupLayoutCount;i++){
         wgpuBindGroupLayoutAddRef(ret->bindGroupLayouts[i]);
         dslayouts[i] = ret->bindGroupLayouts[i]->layout;
     }
-    VkPipelineLayoutCreateInfo lci zeroinit;
+    VkPipelineLayoutCreateInfo lci = {0};
     lci.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     lci.pSetLayouts = dslayouts;
     lci.setLayoutCount = ret->bindGroupLayoutCount;

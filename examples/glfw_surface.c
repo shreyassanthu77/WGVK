@@ -301,7 +301,7 @@ int main(){
             .sType = WGPUSType_ShaderSourceSPIRV
         },
         .code = (uint32_t*)resources_simple_shader_spv,
-        .codeSize = resources_simple_shader_spv_len,
+        .codeSize = resources_simple_shader_spv_len / sizeof(uint32_t),
     };
 
     WGPUShaderModuleDescriptor shaderModuleDesc = {

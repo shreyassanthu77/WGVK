@@ -1559,9 +1559,9 @@ typedef struct WGPUBlendState {
 
 
 
-
 typedef struct WGPUShaderSourceSPIRV {
     WGPUChainedStruct chain;
+    // In uin32_t's, NOT in bytes
     uint32_t codeSize;
     const uint32_t* code;
 } WGPUShaderSourceSPIRV;
