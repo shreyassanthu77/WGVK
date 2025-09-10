@@ -2068,7 +2068,7 @@ void wgpuBufferMap(WGPUBuffer buffer, WGPUMapMode mapmode, size_t offset, size_t
             wgpuFenceWait(buffer->latestFence, ((uint64_t)1) << 40);
         }
         wgpuFenceRelease(buffer->latestFence);
-        buffer->latestFence = NULL;    
+        buffer->latestFence = NULL;
     }
     buffer->mapState = WGPUBufferMapState_Mapped;
     switch(buffer->allocationType){
@@ -2080,17 +2080,17 @@ void wgpuBufferMap(WGPUBuffer buffer, WGPUMapMode mapmode, size_t offset, size_t
                 wgvk_assert(mapResult == VK_SUCCESS, "Mapping memory failed: %s", vkErrorString(mapResult));
             }
             *data = (void*)(((uint8_t*)chunk->mapped) + allocation->offset + offset);
-            buffer->mappedRange = data;
+            buffer->mappedRange = *data;
         }break;
         #if USE_VMA_ALLOCATOR == 1
         case AllocationTypeVMA: {
             vmaMapMemory(buffer->device->allocator, buffer->vmaAllocation, data);
-            buffer->mappedRange = data;
+            buffer->mappedRange = *data;
         }break;
         #endif
         case AllocationTypeJustMemory: {
             device->functions.vkMapMemory(device->device, buffer->justMemory, offset, size, 0, data);
-            buffer->mappedRange = data;
+            buffer->mappedRange = *data;
         }break;
         default:
         rg_unreachable();
@@ -2155,7 +2155,7 @@ size_t wgpuBufferGetSize(WGPUBuffer buffer){
             return buffer->builtinAllocation.size;
         }break;
 
-        #if USE_VMA_ALLOCATOR
+        #if USE_VMA_ALLOCATOR == 1
         case AllocationTypeVMA: {
             VmaAllocationInfo info zeroinit;
             vmaGetAllocationInfo(buffer->device->allocator, buffer->vmaAllocation, &info);
@@ -3405,16 +3405,16 @@ WGPURenderPassEncoder wgpuCommandEncoderBeginRenderPass(WGPUCommandEncoder enc, 
     };
 
     
-    //for(uint32_t i = 0;i < rpdesc->colorAttachmentCount;i++){
-    //    wgvk_assert(rpdesc->colorAttachments[i].view, "colorAttachments[%d].view is null", (int)i);
-    //    ce_trackTextureView(enc, rpdesc->colorAttachments[i].view, iur_color);
-    //}
-//
-    //for(uint32_t i = 0;i < rpdesc->colorAttachmentCount;i++){
-    //    if(rpdesc->colorAttachments[i].resolveTarget){
-    //        ce_trackTextureView(enc, rpdesc->colorAttachments[i].resolveTarget, iur_resolve);
-    //    }
-    //}
+    for(uint32_t i = 0;i < rpdesc->colorAttachmentCount;i++){
+        wgvk_assert(rpdesc->colorAttachments[i].view, "colorAttachments[%d].view is null", (int)i);
+        ce_trackTextureView(enc, rpdesc->colorAttachments[i].view, iur_color);
+    }
+
+    for(uint32_t i = 0;i < rpdesc->colorAttachmentCount;i++){
+        if(rpdesc->colorAttachments[i].resolveTarget){
+            ce_trackTextureView(enc, rpdesc->colorAttachments[i].resolveTarget, iur_resolve);
+        }
+    }
 
     if(rpdesc->depthStencilAttachment){
         wgvk_assert(rpdesc->depthStencilAttachment->view, "depthStencilAttachment.view is null");
@@ -4357,6 +4357,41 @@ void wgpuQueueWaitIdle(WGPUQueue queue){
 }
 DEFINE_VECTOR_WITH_INLINE_STORAGE(static inline, CmdBarrierSet, CmdBarrierSetILVector, 4);
 const int use_single_submit = 1;
+static const char* il_string(VkImageLayout layout){
+    switch(layout){
+        case VK_IMAGE_LAYOUT_UNDEFINED: return "VK_IMAGE_LAYOUT_UNDEFINED";
+        case VK_IMAGE_LAYOUT_GENERAL: return "VK_IMAGE_LAYOUT_GENERAL";
+        case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL: return "VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL";
+        case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL: return "VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL";
+        case VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL: return "VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL";
+        case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL: return "VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL";
+        case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL: return "VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL";
+        case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL: return "VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL";
+        case VK_IMAGE_LAYOUT_PREINITIALIZED: return "VK_IMAGE_LAYOUT_PREINITIALIZED";
+        case VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL: return "VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL";
+        case VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL: return "VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL";
+        case VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL: return "VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL";
+        case VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL: return "VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL";
+        case VK_IMAGE_LAYOUT_STENCIL_ATTACHMENT_OPTIMAL: return "VK_IMAGE_LAYOUT_STENCIL_ATTACHMENT_OPTIMAL";
+        case VK_IMAGE_LAYOUT_STENCIL_READ_ONLY_OPTIMAL: return "VK_IMAGE_LAYOUT_STENCIL_READ_ONLY_OPTIMAL";
+        case VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL: return "VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL";
+        case VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL: return "VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL";
+        case VK_IMAGE_LAYOUT_RENDERING_LOCAL_READ: return "VK_IMAGE_LAYOUT_RENDERING_LOCAL_READ";
+        case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR: return "VK_IMAGE_LAYOUT_PRESENT_SRC_KHR";
+        case VK_IMAGE_LAYOUT_VIDEO_DECODE_DST_KHR: return "VK_IMAGE_LAYOUT_VIDEO_DECODE_DST_KHR";
+        case VK_IMAGE_LAYOUT_VIDEO_DECODE_SRC_KHR: return "VK_IMAGE_LAYOUT_VIDEO_DECODE_SRC_KHR";
+        case VK_IMAGE_LAYOUT_VIDEO_DECODE_DPB_KHR: return "VK_IMAGE_LAYOUT_VIDEO_DECODE_DPB_KHR";
+        case VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR: return "VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR";
+        case VK_IMAGE_LAYOUT_FRAGMENT_DENSITY_MAP_OPTIMAL_EXT: return "VK_IMAGE_LAYOUT_FRAGMENT_DENSITY_MAP_OPTIMAL_EXT";
+        case VK_IMAGE_LAYOUT_FRAGMENT_SHADING_RATE_ATTACHMENT_OPTIMAL_KHR: return "VK_IMAGE_LAYOUT_FRAGMENT_SHADING_RATE_ATTACHMENT_OPTIMAL_KHR";
+        case VK_IMAGE_LAYOUT_VIDEO_ENCODE_DST_KHR: return "VK_IMAGE_LAYOUT_VIDEO_ENCODE_DST_KHR";
+        case VK_IMAGE_LAYOUT_VIDEO_ENCODE_SRC_KHR: return "VK_IMAGE_LAYOUT_VIDEO_ENCODE_SRC_KHR";
+        case VK_IMAGE_LAYOUT_VIDEO_ENCODE_DPB_KHR: return "VK_IMAGE_LAYOUT_VIDEO_ENCODE_DPB_KHR";
+        case VK_IMAGE_LAYOUT_ATTACHMENT_FEEDBACK_LOOP_OPTIMAL_EXT: return "VK_IMAGE_LAYOUT_ATTACHMENT_FEEDBACK_LOOP_OPTIMAL_EXT";
+        case VK_IMAGE_LAYOUT_VIDEO_ENCODE_QUANTIZATION_MAP_KHR: return "VK_IMAGE_LAYOUT_VIDEO_ENCODE_QUANTIZATION_MAP_KHR";
+        default: return " <Unknown Layout?> ";
+    }
+} 
 void wgpuQueueSubmit(WGPUQueue queue, size_t commandCount, const WGPUCommandBuffer* buffers){
     ENTRY();
 
@@ -4410,6 +4445,12 @@ void wgpuQueueSubmit(WGPUQueue queue, size_t commandCount, const WGPUCommandBuff
         generateInterspersedCompatibilityBarriers(submittableWGPU.data, submittableWGPU.size, compatibilityBarrierSets.data);
         for(uint32_t i = 0;i < submittableWGPU.size;i++){
             const CmdBarrierSet* cbs = CmdBarrierSetILVector_get(&compatibilityBarrierSets, i);
+            for(uint32_t ibi = 0;ibi < cbs->imageBarriers.size;ibi++){
+                if(cbs->imageBarriers.data[i].oldLayout == VK_IMAGE_LAYOUT_UNDEFINED){
+                    // Uncomment for debugging I guess
+                    // fprintf(stderr, "%s:%d: Transitioning from undefined to %s\n", __FILE__, __LINE__, il_string(cbs->imageBarriers.data[i].newLayout));
+                }
+            }
             //printf("cbs size: %lu\n", cbs->bufferBarriers.size);
             WGPUCommandEncoder iencoder = wgpuDeviceCreateCommandEncoder(queue->device, NULL);
             queue->device->functions.vkCmdPipelineBarrier(
@@ -4476,6 +4517,7 @@ void wgpuQueueSubmit(WGPUQueue queue, size_t commandCount, const WGPUCommandBuff
             submitFence->state = WGPUFenceState_InUse;
         }
         for(uint32_t i = 0;i < submittableWGPU.size;i++){
+            ImageUsageRecordMap_for_each(&interspersedBuffers.data[i]->resourceUsage.referencedTextures, updateLayoutCallback, NULL);
             ImageUsageRecordMap_for_each(&submittableWGPU.data[i]->resourceUsage.referencedTextures, updateLayoutCallback, NULL);
         }
         VkSemaphoreVector_free(&waitSemaphores);
@@ -7441,9 +7483,8 @@ void wgpuBindGroupLayoutSetLabel(WGPUBindGroupLayout bindGroupLayout, WGPUString
 
 // Stubs for missing Methods of Buffer
 void wgpuBufferDestroy(WGPUBuffer buffer) {
-     ENTRY();
-
-     EXIT();
+    ENTRY();
+    EXIT();
 }
 const void* wgpuBufferGetConstMappedRange(WGPUBuffer buffer, size_t offset, size_t size) {
     ENTRY();
@@ -7455,25 +7496,30 @@ void* wgpuBufferGetMappedRange(WGPUBuffer buffer, size_t offset, size_t size) {
     return (void*)((char*)buffer->mappedRange + offset);
     EXIT();
 }
-WGPUBufferMapState wgpuBufferGetMapState(WGPUBuffer buffer) {     ENTRY();
-
+WGPUBufferMapState wgpuBufferGetMapState(WGPUBuffer buffer) {
+    ENTRY();
     return buffer->mapState;
     EXIT();
 }
-WGPUBufferUsage wgpuBufferGetUsage(WGPUBuffer buffer) {                                                         ENTRY();
-return buffer->usage;                                                         EXIT();
-                                                                               }
-WGPUStatus wgpuBufferReadMappedRange(WGPUBuffer buffer, size_t offset, void * data, size_t size) {                                                                                                    ENTRY();
-return WGPUStatus_Error;                                                                                                    EXIT();
-                                                                                                                             }
-void wgpuBufferSetLabel(WGPUBuffer buffer, WGPUStringView label) {
-     ENTRY();
-
-     EXIT();
+WGPUBufferUsage wgpuBufferGetUsage(WGPUBuffer buffer) {
+    ENTRY();
+    EXIT();
+    return buffer->usage;
 }
-WGPUStatus wgpuBufferWriteMappedRange(WGPUBuffer buffer, size_t offset, const void* data, size_t size) {                                                                                                          ENTRY();
-return WGPUStatus_Error;                                                                                                          EXIT();
-                                                                                                                                   }
+WGPUStatus wgpuBufferReadMappedRange(WGPUBuffer buffer, size_t offset, void * data, size_t size) {
+    ENTRY();
+    EXIT();
+    return WGPUStatus_Error;
+}
+void wgpuBufferSetLabel(WGPUBuffer buffer, WGPUStringView label) {
+    ENTRY();
+    EXIT();
+}
+WGPUStatus wgpuBufferWriteMappedRange(WGPUBuffer buffer, size_t offset, const void* data, size_t size) {
+    ENTRY();
+    EXIT();
+    return WGPUStatus_Error;
+}
 
 // Stubs for missing Methods of CommandBuffer
 void wgpuCommandBufferSetLabel(WGPUCommandBuffer commandBuffer, WGPUStringView label) {
@@ -7499,14 +7545,14 @@ void wgpuCommandEncoderInsertDebugMarker(WGPUCommandEncoder commandEncoder, WGPU
     EXIT();
 }
 void wgpuCommandEncoderPopDebugGroup(WGPUCommandEncoder commandEncoder) {
-     ENTRY();
+    ENTRY();
 
-     EXIT();
+    EXIT();
 }
 void wgpuCommandEncoderPushDebugGroup(WGPUCommandEncoder commandEncoder, WGPUStringView groupLabel) {
-     ENTRY();
+    ENTRY();
 
-     EXIT();
+    EXIT();
 }
 void wgpuCommandEncoderResolveQuerySet(WGPUCommandEncoder commandEncoder, WGPUQuerySet querySet, uint32_t firstQuery, uint32_t queryCount, WGPUBuffer destination, uint64_t destinationOffset) {
     ENTRY();
