@@ -2482,10 +2482,12 @@ typedef struct WGPUSurfaceImpl{
     WGPUDevice device;
     SurfaceImplType surfaceType;
     WGPUSurfaceConfiguration lastConfig;
-    uint32_t formatCount;
-    uint32_t wgpuFormatCount;
+    uint32_t formatCount; // entry count in formatCache
+    uint32_t wgpuFormatCount; // entry count in wgpuFormatCache
     VkSurfaceFormatKHR* formatCache;
     WGPUTextureFormat* wgpuFormatCache;
+    WGPUToneMappingMode tonemappingMode;
+    WGPUPredefinedColorSpace colorSpace;
 
     uint32_t presentModeCount;
     WGPUPresentMode* presentModeCache;
@@ -3283,6 +3285,8 @@ static inline WGPUTextureFormat fromVulkanPixelFormat(VkFormat format) {
         case VK_FORMAT_R32G32_UINT: return WGPUTextureFormat_RG32Uint;
         case VK_FORMAT_R32G32_SINT: return WGPUTextureFormat_RG32Sint;
         case VK_FORMAT_R16G16B16A16_UINT: return WGPUTextureFormat_RGBA16Uint;
+        case VK_FORMAT_R16G16B16A16_UNORM: return WGPUTextureFormat_RGBA16Unorm;
+        case VK_FORMAT_R16G16B16A16_SNORM: return WGPUTextureFormat_RGBA16Snorm;
         case VK_FORMAT_R16G16B16A16_SINT: return WGPUTextureFormat_RGBA16Sint;
         case VK_FORMAT_R16G16B16A16_SFLOAT: return WGPUTextureFormat_RGBA16Float;
         case VK_FORMAT_R32G32B32A32_SFLOAT: return WGPUTextureFormat_RGBA32Float;
