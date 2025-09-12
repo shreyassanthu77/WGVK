@@ -6014,30 +6014,29 @@ void wgpuCommandEncoderCopyBufferToBuffer  (WGPUCommandEncoder commandEncoder, W
     );
     EXIT();
 }
-void wgpuCommandEncoderCopyBufferToTexture (WGPUCommandEncoder commandEncoder, WGPUTexelCopyBufferInfo const * source, WGPUTexelCopyTextureInfo const * destination, WGPUExtent3D const * copySize){
+void wgpuCommandEncoderCopyBufferToTexture (WGPUCommandEncoder commandEncoder, const WGPUTexelCopyBufferInfo* source, const WGPUTexelCopyTextureInfo* destination, WGPUExtent3D const * copySize){
     ENTRY();
     
-    VkBufferImageCopy region zeroinit;
     ++commandEncoder->encodedCommandCount;
-    region.bufferOffset = 0;
-    region.bufferRowLength = 0;
-    region.bufferImageHeight = 0;
-
-    region.imageSubresource.aspectMask = toVulkanAspectMaskVk(destination->aspect, destination->texture->format);
-    region.imageSubresource.mipLevel = 0;
-    region.imageSubresource.baseArrayLayer = 0;
-    region.imageSubresource.layerCount = 1;
-
-    region.imageOffset = CLITERAL(VkOffset3D){
-        (int32_t)destination->origin.x,
-        (int32_t)destination->origin.y,
-        (int32_t)destination->origin.z,
-    };
-
-    region.imageExtent = CLITERAL(VkExtent3D){
-        copySize->width,
-        copySize->height,
-        copySize->depthOrArrayLayers
+    
+    const VkBufferImageCopy region = {
+        .bufferOffset = 0,
+        .bufferRowLength = source->layout.bytesPerRow / 4,
+        .bufferImageHeight = source->layout.rowsPerImage,
+        .imageSubresource.aspectMask = toVulkanAspectMaskVk(destination->aspect, destination->texture->format),
+        .imageSubresource.mipLevel = 0,
+        .imageSubresource.baseArrayLayer = 0,
+        .imageSubresource.layerCount = 1,
+        .imageOffset = CLITERAL(VkOffset3D){
+            (int32_t)destination->origin.x,
+            (int32_t)destination->origin.y,
+            (int32_t)destination->origin.z,
+        },
+        .imageExtent = CLITERAL(VkExtent3D){
+            copySize->width,
+            copySize->height,
+            copySize->depthOrArrayLayers
+        },
     };
     
     ce_trackBuffer(commandEncoder, source->buffer, (BufferUsageSnap){VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_READ_BIT});
@@ -6077,11 +6076,11 @@ void wgpuCommandEncoderCopyTextureToBuffer (WGPUCommandEncoder commandEncoder, c
     });
     ce_trackBuffer(commandEncoder, destination->buffer, (BufferUsageSnap){VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT});
     
-    
+
     VkBufferImageCopy region = {
         .bufferOffset = destination->layout.offset,
-        //.bufferRowLength = destination->layout.bytesPerRow / 4,
-        //.bufferImageHeight = destination->layout.rowsPerImage,
+        .bufferRowLength = destination->layout.bytesPerRow / 4,
+        .bufferImageHeight = destination->layout.rowsPerImage,
         .imageSubresource = {
             .aspectMask = toVulkanAspectMaskVk(source->aspect, source->texture->format),
             .baseArrayLayer = source->origin.z, // ?
@@ -6094,9 +6093,9 @@ void wgpuCommandEncoderCopyTextureToBuffer (WGPUCommandEncoder commandEncoder, c
             .z = (int32_t)source->origin.z
         },
         .imageExtent = {
-            .width = copySize->width,
+            .width  = copySize->width,
             .height = copySize->height,
-            .depth = copySize->depthOrArrayLayers
+            .depth  = copySize->depthOrArrayLayers
         }
     };
     commandEncoder->device->functions.vkCmdCopyImageToBuffer(
