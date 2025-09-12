@@ -8772,8 +8772,6 @@ void wgpuTextureViewSetLabel(WGPUTextureView textureView, WGPUStringView label) 
 // =============================================================================
 // Allocator implementation
 // =============================================================================
-
-
 static void allocator_destroy(VirtualAllocator* allocator) {
     if (!allocator) return;
     free(allocator->level0);
@@ -8805,66 +8803,98 @@ static size_t allocator_alloc(VirtualAllocator* allocator, size_t size, size_t a
     if (size == 0) return 0;
     if (size > allocator->size_in_bytes) return OUT_OF_SPACE;
 
-    const size_t num_blocks = (size + ALLOCATOR_GRANULARITY - 1) / ALLOCATOR_GRANULARITY;
+    {
+        size_t min_align = ALLOCATOR_GRANULARITY;
+        if (alignment < min_align) alignment = min_align;
+        size_t a = alignment - 1;
+        a |= a >> 1;
+        a |= a >> 2;
+        a |= a >> 4;
+        a |= a >> 8;
+        a |= a >> 16;
+#if SIZE_MAX > 0xFFFFFFFFu
+        a |= a >> 32;
+#endif
+        alignment = a + 1;
+    }
 
-    for (size_t i = 0; i < allocator->total_blocks;) {
+    const size_t num_blocks = (size + ALLOCATOR_GRANULARITY - 1) / ALLOCATOR_GRANULARITY;
+    if (num_blocks == 0) return 0;
+    if (num_blocks > allocator->total_blocks) return OUT_OF_SPACE;
+
+    const size_t last_start_block =
+        allocator->total_blocks - num_blocks; // only these starts can ever fit
+
+    for (size_t i = 0; i <= last_start_block; ) {
         size_t l2_word_idx = i / BITS_PER_WORD;
-        size_t bit_idx = i % BITS_PER_WORD;
-        
-        if (((allocator->level2[l2_word_idx] >> bit_idx) & 1ULL)) {
-            i++;
+        size_t bit_idx     = i % BITS_PER_WORD;
+
+        // Skip if current start block is occupied.
+        if (((allocator->level2[l2_word_idx] >> bit_idx) & 1ULL) != 0) {
+            ++i;
             continue;
         }
 
-        size_t offset = i * ALLOCATOR_GRANULARITY;
+        // Enforce alignment in bytes, then convert to blocks.
+        size_t offset         = i * ALLOCATOR_GRANULARITY;
         size_t aligned_offset = (offset + alignment - 1) & ~(alignment - 1);
         if (aligned_offset != offset) {
-            i = aligned_offset / ALLOCATOR_GRANULARITY;
+            size_t next_i = aligned_offset / ALLOCATOR_GRANULARITY;
+            if (next_i <= i) ++i; else i = next_i;
+            if (i > last_start_block) break; // cannot fit anymore
             continue;
         }
 
+        // Probe forward for a contiguous free run.
         bool possible = true;
-        for (size_t j = 0; j < num_blocks; j++) {
+        for (size_t j = 0; j < num_blocks; ++j) {
             size_t block_to_check = i + j;
-            if (block_to_check >= allocator->total_blocks) {
+            // If this start would run past the end, stop the outer loop.
+            if (block_to_check > last_start_block + (num_blocks - 1)) {
+                i = last_start_block + 1; // force exit
                 possible = false;
                 break;
             }
             size_t check_l2_word = block_to_check / BITS_PER_WORD;
             size_t check_bit_idx = block_to_check % BITS_PER_WORD;
-            if ((allocator->level2[check_l2_word] >> check_bit_idx) & 1ULL) {
-                i = block_to_check + 1;
-                possible = false;
+            if (((allocator->level2[check_l2_word] >> check_bit_idx) & 1ULL) != 0) {
+                i = block_to_check + 1; // jump just past first conflict
+                if (i > last_start_block) { possible = false; }
+                else { possible = false; }
                 break;
             }
         }
 
-        if (possible) {
-            size_t start_block_index = i;
-            for (size_t j = 0; j < num_blocks; ++j) {
-                size_t current_block = start_block_index + j;
-                size_t current_l2_word_idx = current_block / BITS_PER_WORD;
-                size_t current_bit_idx = current_block % BITS_PER_WORD;
-                allocator->level2[current_l2_word_idx] |= (1ULL << current_bit_idx);
-            }
-             size_t first_l2 = start_block_index / BITS_PER_WORD;
-             size_t last_l2 = (start_block_index + num_blocks - 1) / BITS_PER_WORD;
-             for(size_t l2_idx = first_l2; l2_idx <= last_l2; ++l2_idx) {
-                if(allocator->level2[l2_idx] != 0) {
-                    size_t l1_idx = l2_idx / BITS_PER_WORD;
-                    size_t l1_bit = l2_idx % BITS_PER_WORD;
-                    allocator->level1[l1_idx] |= (1ULL << l1_bit);
-
-                    if(allocator->level1[l1_idx] != 0) {
-                         size_t l0_idx = l1_idx / BITS_PER_WORD;
-                         size_t l0_bit = l1_idx % BITS_PER_WORD;
-                         allocator->level0[l0_idx] |= (1ULL << l0_bit);
-                    }
-                }
-             }
-            return start_block_index * ALLOCATOR_GRANULARITY;
+        if (!possible) {
+            continue;
         }
+
+        // Claim the run.
+        size_t start_block_index = i;
+        for (size_t j = 0; j < num_blocks; ++j) {
+            size_t current_block     = start_block_index + j;
+            size_t current_l2_word   = current_block / BITS_PER_WORD;
+            size_t current_bit_idx   = current_block % BITS_PER_WORD;
+            allocator->level2[current_l2_word] |= (1ULL << current_bit_idx);
+        }
+
+        // Update summary levels.
+        size_t first_l2 = start_block_index / BITS_PER_WORD;
+        size_t last_l2  = (start_block_index + num_blocks - 1) / BITS_PER_WORD;
+        for (size_t l2_idx = first_l2; l2_idx <= last_l2; ++l2_idx) {
+            if (allocator->level2[l2_idx] != 0) {
+                size_t l1_idx = l2_idx / BITS_PER_WORD;
+                size_t l1_bit = l2_idx % BITS_PER_WORD;
+                allocator->level1[l1_idx] |= (1ULL << l1_bit);
+
+                size_t l0_idx = l1_idx / BITS_PER_WORD;
+                size_t l0_bit = l1_idx % BITS_PER_WORD;
+                allocator->level0[l0_idx] |= (1ULL << l0_bit);
+            }
+        }
+        return start_block_index * ALLOCATOR_GRANULARITY;
     }
+
     return OUT_OF_SPACE;
 }
 
@@ -8916,7 +8946,7 @@ static VkResult wgvkDeviceMemoryPool_create_chunk(WgvkDeviceMemoryPool* pool, si
     if (!allocator_create(&new_chunk->allocator, size)) {
         return VK_ERROR_OUT_OF_HOST_MEMORY;
     }
-    
+
     VkMemoryAllocateFlagsInfo flagsInfo = {
         .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO,
         .flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT
@@ -8927,7 +8957,7 @@ static VkResult wgvkDeviceMemoryPool_create_chunk(WgvkDeviceMemoryPool* pool, si
         .allocationSize = size,
         .memoryTypeIndex = pool->memoryTypeIndex,
     };
-    if(pool->device->capabilities.shaderDeviceAddress){
+    if (pool->device->capabilities.shaderDeviceAddress) {
         allocInfo.pNext = &flagsInfo;
     }
     VkResult result = pool->pFunctions->vkAllocateMemory(pool->device->device, &allocInfo, NULL, &new_chunk->memory);
@@ -8941,6 +8971,22 @@ static VkResult wgvkDeviceMemoryPool_create_chunk(WgvkDeviceMemoryPool* pool, si
 }
 
 static bool wgvkDeviceMemoryPool_alloc(WgvkDeviceMemoryPool* pool, size_t size, size_t alignment, wgvkAllocation* out_allocation) {
+    // Harden alignment at the callsite as well.
+    {
+        size_t min_align = ALLOCATOR_GRANULARITY;
+        if (alignment < min_align) alignment = min_align;
+        size_t a = alignment - 1;
+        a |= a >> 1;
+        a |= a >> 2;
+        a |= a >> 4;
+        a |= a >> 8;
+        a |= a >> 16;
+#if SIZE_MAX > 0xFFFFFFFFu
+        a |= a >> 32;
+#endif
+        alignment = a + 1;
+    }
+
     for (uint32_t i = 0; i < pool->chunk_count; ++i) {
         WgvkMemoryChunk* chunk = &pool->chunks[i];
         size_t offset = allocator_alloc(&chunk->allocator, size, alignment);
@@ -9014,10 +9060,27 @@ RGAPI void wgvkAllocator_destroy(WgvkAllocator* allocator) {
 }
 
 RGAPI bool wgvkAllocator_alloc(WgvkAllocator* allocator, const VkMemoryRequirements* requirements, VkMemoryPropertyFlags propertyFlags, wgvkAllocation* out_allocation) {
+    // Normalized alignment used everywhere below.
+    size_t norm_alignment = requirements->alignment;
+    {
+        size_t min_align = ALLOCATOR_GRANULARITY;
+        if (norm_alignment < min_align) norm_alignment = min_align;
+        size_t a = norm_alignment - 1;
+        a |= a >> 1;
+        a |= a >> 2;
+        a |= a >> 4;
+        a |= a >> 8;
+        a |= a >> 16;
+#if SIZE_MAX > 0xFFFFFFFFu
+        a |= a >> 32;
+#endif
+        norm_alignment = a + 1;
+    }
+
     for (uint32_t i = 0; i < allocator->memoryProperties.memoryTypeCount; ++i) {
         if (!((requirements->memoryTypeBits >> i) & 1)) continue;
         if ((allocator->memoryProperties.memoryTypes[i].propertyFlags & propertyFlags) != propertyFlags) continue;
-        
+
         WgvkDeviceMemoryPool* found_pool = NULL;
         for (uint32_t j = 0; j < allocator->pool_count; ++j) {
             if (allocator->pools[j].memoryTypeIndex == i) {
@@ -9025,9 +9088,9 @@ RGAPI bool wgvkAllocator_alloc(WgvkAllocator* allocator, const VkMemoryRequireme
                 break;
             }
         }
-        
+
         if (found_pool) {
-            if (wgvkDeviceMemoryPool_alloc(found_pool, requirements->size, requirements->alignment, out_allocation)) {
+            if (wgvkDeviceMemoryPool_alloc(found_pool, requirements->size, norm_alignment, out_allocation)) {
                 return true;
             }
         }
@@ -9036,7 +9099,7 @@ RGAPI bool wgvkAllocator_alloc(WgvkAllocator* allocator, const VkMemoryRequireme
     for (uint32_t i = 0; i < allocator->memoryProperties.memoryTypeCount; ++i) {
         if (!((requirements->memoryTypeBits >> i) & 1)) continue;
         if ((allocator->memoryProperties.memoryTypes[i].propertyFlags & propertyFlags) != propertyFlags) continue;
-        
+
         if (allocator->pool_count == allocator->pool_capacity) {
             uint32_t new_capacity = allocator->pool_capacity == 0 ? 4 : allocator->pool_capacity * 2;
             WgvkDeviceMemoryPool* new_pools = RL_REALLOC(allocator->pools, new_capacity * sizeof(WgvkDeviceMemoryPool));
@@ -9053,11 +9116,11 @@ RGAPI bool wgvkAllocator_alloc(WgvkAllocator* allocator, const VkMemoryRequireme
         new_pool->pFunctions = allocator->pFunctions;
 
         allocator->pool_count++;
-        
-        if (wgvkDeviceMemoryPool_alloc(new_pool, requirements->size, requirements->alignment, out_allocation)) {
+
+        if (wgvkDeviceMemoryPool_alloc(new_pool, requirements->size, norm_alignment, out_allocation)) {
             return true;
         } else {
-             allocator->pool_count--; 
+            allocator->pool_count--;
         }
     }
 
