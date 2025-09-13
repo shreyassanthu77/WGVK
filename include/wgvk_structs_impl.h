@@ -126,17 +126,109 @@ typedef enum wgvk_locktype{
 typedef struct wgvk_mutex wgvk_mutex_t;
 typedef struct wgvk_cond  wgvk_cond_t;
 
+/**
+ * @brief Create a mutex.
+ * @param backend Selects implementation: wgvk_locktype_kernel or wgvk_locktype_spin.
+ * @return Pointer to a heap-allocated mutex, or NULL on failure.
+ * @retval NULL Allocation failure sets errno=ENOMEM. Kernel-init failure returns NULL;
+ *              on POSIX errno may not be set (pthread_* returns an int, not errno).
+ */
 wgvk_mutex_t* wgvk_mutex_create(wgvk_locktype backend);
-int           wgvk_mutex_destroy(wgvk_mutex_t* m);
-int           wgvk_mutex_lock(wgvk_mutex_t* m);
-int           wgvk_mutex_try_lock(wgvk_mutex_t* m);
-int           wgvk_mutex_unlock(wgvk_mutex_t* m);
 
+/**
+ * @brief Destroy a mutex and free its memory.
+ * @param m Mutex created by wgvk_mutex_create.
+ * @return 0 on success, or an error code.
+ * @retval EINVAL m is NULL.
+ * @retval EBUSY  POSIX kernel mutex still locked (pthread_mutex_destroy).
+ * @retval 0      POSIX spin and Windows paths always succeed after free.
+ */
+int wgvk_mutex_destroy(wgvk_mutex_t* m);
+
+/**
+ * @brief Lock a mutex, blocking until acquired.
+ * @param m Mutex to lock.
+ * @return 0 on success, or an error code.
+ * @retval EINVAL m is NULL, or invalid kernel mutex on POSIX.
+ * @retval EDEADLK POSIX kernel mutex deadlock detected (pthread_mutex_lock).
+ * @note Windows kernel path always returns 0 on success and does not report errors.
+ */
+int wgvk_mutex_lock(wgvk_mutex_t* m);
+
+/**
+ * @brief Try to lock a mutex without blocking.
+ * @param m Mutex to try-lock.
+ * @return 0 on success, or an error code.
+ * @retval EINVAL m is NULL, or invalid kernel mutex on POSIX.
+ * @retval EBUSY  Already locked (both spin and Windows kernel path map to EBUSY).
+ * @note POSIX kernel path returns pthread_mutex_trylock’s code (0, EBUSY, EINVAL).
+ */
+int wgvk_mutex_try_lock(wgvk_mutex_t* m);
+
+/**
+ * @brief Unlock a mutex.
+ * @param m Mutex to unlock.
+ * @return 0 on success, or an error code.
+ * @retval EINVAL m is NULL, or invalid kernel mutex on POSIX.
+ * @retval EPERM  POSIX kernel mutex not owned by caller (pthread_mutex_unlock).
+ * @note Spin and Windows kernel paths return 0 on success.
+ */
+int wgvk_mutex_unlock(wgvk_mutex_t* m);
+
+/**
+ * @brief Create a condition variable.
+ * @param backend Must match the mutex type used with it:
+ *        kernel CV with kernel mutex, spin CV with spin mutex.
+ * @return Pointer to a heap-allocated condvar, or NULL on failure.
+ * @retval NULL Allocation failure sets errno=ENOMEM. POSIX kernel-init failure returns
+ *              NULL without setting errno (pthread_cond_init returns an int).
+ */
 wgvk_cond_t*  wgvk_cond_create(wgvk_locktype backend);
+
+/**
+ * @brief Destroy a condition variable and free its memory.
+ * @param c Condition variable created by wgvk_cond_create.
+ * @return 0 on success, or an error code.
+ * @retval EINVAL c is NULL.
+ * @retval 0      Windows kernel CV has no destroy; free succeeds.
+ * @note POSIX kernel path returns pthread_cond_destroy’s code (0 or EINVAL).
+ */
 int           wgvk_cond_destroy(wgvk_cond_t* c);
-int           wgvk_cond_wait(wgvk_cond_t* c, wgvk_mutex_t* m); /* caller holds m; returns holding m */
+
+/**
+ * @brief Wait on a condition variable.
+ * @details Caller must hold @p m on entry. On return, @p m is held again.
+ *          The CV and mutex backends must match (kernel with kernel, spin with spin).
+ * @param c Condition variable.
+ * @param m Associated mutex.
+ * @return 0 on success, or an error code.
+ * @retval EINVAL c or m is NULL, or backend mismatch.
+ * @note POSIX kernel path returns pthread_cond_wait’s code (0 or error).
+ * @note Windows kernel path returns 0 on success, or -1 on failure.
+ * @note Spin path busy-waits and returns 0 on success.
+ */
+int           wgvk_cond_wait(wgvk_cond_t* c, wgvk_mutex_t* m);
+
+/**
+ * @brief Wake one waiter, if any.
+ * @param c Condition variable.
+ * @return 0 on success, or an error code.
+ * @retval EINVAL c is NULL.
+ * @note POSIX kernel path returns pthread_cond_signal’s code (0 or error).
+ * @note Spin and Windows kernel paths return 0.
+ */
 int           wgvk_cond_signal(wgvk_cond_t* c);
+
+/**
+ * @brief Wake all current waiters.
+ * @param c Condition variable.
+ * @return 0 on success, or an error code.
+ * @retval EINVAL c is NULL.
+ * @note POSIX kernel path returns pthread_cond_broadcast’s code (0 or error).
+ * @note Spin and Windows kernel paths return 0.
+ */
 int           wgvk_cond_broadcast(wgvk_cond_t* c);
+
 
 
 typedef enum {

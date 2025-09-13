@@ -9135,25 +9135,38 @@ RGAPI void wgvkAllocator_free(const wgvkAllocation* allocation) {
 // Threads implementation
 // =============================================================================
 
-// wgvk.c
 #define _POSIX_C_SOURCE 200809L
-#include "wgvk.h"
 
-#include <stdlib.h>
 #include <errno.h>
-#include <stdatomic.h>
-#include <string.h>
 
 #if defined(_WIN32) || defined(_WIN64)
-  #define WGVK_OS_WINDOWS 1
-  #include <windows.h>
+    #define WGVK_OS_WINDOWS 1
+    #include <windows.h>
 #else
-  #define WGVK_OS_POSIX 1
-  #include <pthread.h>
-  #include <semaphore.h>
-  #include <sched.h>
-  #include <unistd.h>
+    #define WGVK_OS_POSIX 1
+    #include <pthread.h>
+    #include <sched.h>
+    #include <unistd.h>
 #endif
+
+
+/**
+ * @brief Portable "yield" function
+ * 
+ */
+static inline void wgvk_cpu_relax(void) {
+#if defined(WGVK_OS_WINDOWS)
+    YieldProcessor();              /* maps to PAUSE/YIELD on target */
+#elif defined(__x86_64__) || defined(__i386__)
+    __builtin_ia32_pause();        /* GCC/Clang x86 */
+#elif defined(__aarch64__) || defined(__arm__)
+    __asm__ __volatile__("yield"); /* ARM */
+#else
+    atomic_signal_fence(memory_order_seq_cst); /* portable fallback */
+#endif
+}
+
+
 
 /* ------------------------ thread implementation ------------------------ */
 
@@ -9339,27 +9352,31 @@ struct wgvk_mutex {
 #endif
 };
 
-/* cond: kernel (pthread_cond / CONDITION_VARIABLE) OR spin (semaphore + waiters counter) */
+/**
+ * @brief condition_variable type, either kernel (pthread/win32 threads)
+ * or purely busy spinwait based
+ */
 struct wgvk_cond {
     wgvk_locktype backend;
 #if defined(WGVK_OS_POSIX)
     union {
-        pthread_cond_t pc;
-        struct {
-            sem_t       sem;
-            atomic_uint waiters;
+        pthread_cond_t pc; /* kernel */
+        struct {           /* spin */
+            atomic_uint tokens;   /* produced wakeups */
+            atomic_uint waiters;  /* threads currently in wait */
         } s;
     } u;
 #else
     union {
-        CONDITION_VARIABLE cv;
-        struct {
-            HANDLE       sem;
-            atomic_uint  waiters;
+        CONDITION_VARIABLE cv; /* kernel */
+        struct {               /* spin */
+            atomic_uint tokens;
+            atomic_uint waiters;
         } s;
     } u;
 #endif
 };
+
 
 /* ------------------------ mutex API ------------------------ */
 
@@ -9499,20 +9516,20 @@ wgvk_cond_t* wgvk_cond_create(wgvk_locktype backend) {
     if (backend == wgvk_locktype_kernel) {
         if (pthread_cond_init(&c->u.pc, NULL) != 0) { free(c); return NULL; }
     } else {
+        atomic_init(&c->u.s.tokens, 0u);
         atomic_init(&c->u.s.waiters, 0u);
-        if (sem_init(&c->u.s.sem, 0, 0) != 0) { free(c); return NULL; }
     }
-#else /* Windows */
+#else
     if (backend == wgvk_locktype_kernel) {
         InitializeConditionVariable(&c->u.cv);
     } else {
+        atomic_init(&c->u.s.tokens, 0u);
         atomic_init(&c->u.s.waiters, 0u);
-        c->u.s.sem = CreateSemaphoreW(NULL, 0, LONG_MAX, NULL);
-        if (!c->u.s.sem) { free(c); return NULL; }
     }
 #endif
     return c;
 }
+
 
 int wgvk_cond_destroy(wgvk_cond_t* c) {
     if (!c) return EINVAL;
@@ -9522,33 +9539,26 @@ int wgvk_cond_destroy(wgvk_cond_t* c) {
         free(c);
         return e;
     } else {
-        int e = sem_destroy(&c->u.s.sem);
         free(c);
-        return e;
+        return 0;
     }
 #else
     if (c->backend == wgvk_locktype_kernel) {
-        /* no destroy */
+        /* no destroy for CONDITION_VARIABLE */
         free(c);
         return 0;
     } else {
-        if (!CloseHandle(c->u.s.sem)) {
-            int e = (int)GetLastError();
-            free(c);
-            return e;
-        }
         free(c);
         return 0;
     }
 #endif
 }
 
-/* Wait: caller must hold m. On return caller holds m again.
-   For kernel backend: m must be a kernel mutex created with backend kernel.
-   For spin backend: m must be a spin mutex created with backend spin.
-*/
+/* ----------------------------- wgvk_cond_wait ----------------------------- */
+/* m must be a spin mutex when c is spin-backed. */
 int wgvk_cond_wait(wgvk_cond_t* c, wgvk_mutex_t* m) {
     if (!c || !m) return EINVAL;
+
     if (c->backend == wgvk_locktype_kernel) {
 #if defined(WGVK_OS_POSIX)
         if (m->backend != wgvk_locktype_kernel) return EINVAL;
@@ -9558,33 +9568,44 @@ int wgvk_cond_wait(wgvk_cond_t* c, wgvk_mutex_t* m) {
         BOOL ok = SleepConditionVariableCS(&c->u.cv, &m->u.cs, INFINITE);
         return ok ? 0 : -1;
 #endif
-    } else {
-        /* spin backend: use semaphore parking */
-        if (m->backend != wgvk_locktype_spin) return EINVAL;
-#if defined(WGVK_OS_POSIX)
-        atomic_fetch_add_explicit(&c->u.s.waiters, 1u, memory_order_acq_rel);
-        /* release spinlock */
-        atomic_flag_clear_explicit(&m->u.spin, memory_order_release);
-        int s;
-        do { s = sem_wait(&c->u.s.sem); } while (s == -1 && errno == EINTR);
-        atomic_fetch_sub_explicit(&c->u.s.waiters, 1u, memory_order_acq_rel);
-        /* reacquire spinlock */
-        while (atomic_flag_test_and_set_explicit(&m->u.spin, memory_order_acquire)) sched_yield();
-        return 0;
-#else
-        atomic_fetch_add_explicit(&c->u.s.waiters, 1u, memory_order_acq_rel);
-        atomic_flag_clear_explicit(&m->u.spin, memory_order_release);
-        DWORD r = WaitForSingleObject(c->u.s.sem, INFINITE);
-        (void)r; /* ignore WAIT_FAILED for compactness */
-        atomic_fetch_sub_explicit(&c->u.s.waiters, 1u, memory_order_acq_rel);
-        while (atomic_flag_test_and_set_explicit(&m->u.spin, memory_order_acquire)) Sleep(0);
-        return 0;
-#endif
     }
+
+    if (m->backend != wgvk_locktype_spin) return EINVAL;
+
+    /* Register as waiter before releasing the lock to avoid lost wakeups. */
+    atomic_fetch_add_explicit(&c->u.s.waiters, 1u, memory_order_acq_rel);
+
+    /* Release spin mutex. */
+    atomic_flag_clear_explicit(&m->u.spin, memory_order_release);
+
+    /* Busy-wait until we consume one token. */
+    for (;;) {
+        unsigned t = atomic_load_explicit(&c->u.s.tokens, memory_order_acquire);
+        if (t > 0) {
+            if (atomic_compare_exchange_weak_explicit(&c->u.s.tokens, &t, t - 1,
+                                                      memory_order_acq_rel,
+                                                      memory_order_relaxed)) {
+                break; /* token consumed */
+            }
+        }
+        wgvk_cpu_relax();
+    }
+
+    /* We are no longer a waiter. */
+    atomic_fetch_sub_explicit(&c->u.s.waiters, 1u, memory_order_acq_rel);
+
+    /* Reacquire spin mutex. */
+    while (atomic_flag_test_and_set_explicit(&m->u.spin, memory_order_acquire))
+        wgvk_cpu_relax();
+
+    return 0;
 }
 
+/* ---------------------------- wgvk_cond_signal ---------------------------- */
+/* Produces exactly one token if at least one thread is waiting. */
 int wgvk_cond_signal(wgvk_cond_t* c) {
     if (!c) return EINVAL;
+
     if (c->backend == wgvk_locktype_kernel) {
 #if defined(WGVK_OS_POSIX)
         return pthread_cond_signal(&c->u.pc);
@@ -9592,21 +9613,29 @@ int wgvk_cond_signal(wgvk_cond_t* c) {
         WakeConditionVariable(&c->u.cv);
         return 0;
 #endif
-    } else {
-#if defined(WGVK_OS_POSIX)
-        unsigned int w = atomic_load_explicit(&c->u.s.waiters, memory_order_acquire);
-        if (w > 0) sem_post(&c->u.s.sem);
-        return 0;
-#else
-        unsigned int w = atomic_load_explicit(&c->u.s.waiters, memory_order_acquire);
-        if (w > 0) ReleaseSemaphore(c->u.s.sem, 1, NULL);
-        return 0;
-#endif
     }
+
+    unsigned w = atomic_load_explicit(&c->u.s.waiters, memory_order_acquire);
+    if (w == 0) return 0;
+
+    /* Avoid accumulating surplus tokens. */
+    for (;;) {
+        unsigned t = atomic_load_explicit(&c->u.s.tokens, memory_order_acquire);
+        if (t >= w) break; /* enough tokens outstanding */
+        if (atomic_compare_exchange_weak_explicit(&c->u.s.tokens, &t, t + 1,
+                                                  memory_order_release,
+                                                  memory_order_relaxed)) {
+            break;
+        }
+    }
+    return 0;
 }
 
+/* -------------------------- wgvk_cond_broadcast --------------------------- */
+/* Produces one token per observed waiter. */
 int wgvk_cond_broadcast(wgvk_cond_t* c) {
     if (!c) return EINVAL;
+
     if (c->backend == wgvk_locktype_kernel) {
 #if defined(WGVK_OS_POSIX)
         return pthread_cond_broadcast(&c->u.pc);
@@ -9614,17 +9643,22 @@ int wgvk_cond_broadcast(wgvk_cond_t* c) {
         WakeAllConditionVariable(&c->u.cv);
         return 0;
 #endif
-    } else {
-#if defined(WGVK_OS_POSIX)
-        unsigned int w = atomic_exchange_explicit(&c->u.s.waiters, 0u, memory_order_acq_rel);
-        for (unsigned int i = 0; i < w; ++i) sem_post(&c->u.s.sem);
-        return 0;
-#else
-        unsigned int w = atomic_exchange_explicit(&c->u.s.waiters, 0u, memory_order_acq_rel);
-        if (w > 0) ReleaseSemaphore(c->u.s.sem, (LONG)w, NULL);
-        return 0;
-#endif
     }
+
+    unsigned w = atomic_load_explicit(&c->u.s.waiters, memory_order_acquire);
+    if (w == 0) return 0;
+
+    /* Bring tokens up to at least waiters. */
+    for (;;) {
+        unsigned t = atomic_load_explicit(&c->u.s.tokens, memory_order_acquire);
+        if (t >= w) break;
+        if (atomic_compare_exchange_weak_explicit(&c->u.s.tokens, &t, w,
+                                                  memory_order_release,
+                                                  memory_order_relaxed)) {
+            break;
+        }
+    }
+    return 0;
 }
 
 /* ------------------------ thread-pool (uses kernel primitives) ------------------------ */
