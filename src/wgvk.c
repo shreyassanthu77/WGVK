@@ -6576,7 +6576,7 @@ void wgpuSurfacePresent(WGPUSurface surface){
     };
 
     VkResult presentRes = device->functions.vkQueuePresentKHR(surface->device->queue->presentQueue, &presentInfo);
-    if(presentRes != VK_SUCCESS){
+    if(presentRes != VK_SUCCESS && presentRes != VK_SUBOPTIMAL_KHR){
         fprintf(stderr, "vkQueuePresentKHR returned %s\n", vkErrorString(presentRes));
     }
     wgpuDeviceTick(surface->device);
