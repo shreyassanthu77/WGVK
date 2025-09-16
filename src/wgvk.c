@@ -6537,18 +6537,29 @@ void wgpuSurfacePresent(WGPUSurface surface){
     );
     surface->images[surface->activeImageIndex]->layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
     device->functions.vkEndCommandBuffer(transitionBuffer);
-    VkPipelineStageFlags wsmask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+
+    VkPipelineStageFlags wsmask[2] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+    VkSemaphore waitSemaphores[2] = {VK_NULL_HANDLE, VK_NULL_HANDLE};
+    uint32_t waitSemaphoreCount = 0;
+    if(syncState->submits > 0){
+        waitSemaphores[waitSemaphoreCount++] = syncState->semaphores.data[syncState->submits];
+    }
+    if(syncState->acquireImageSemaphoreSignalled){
+        waitSemaphores[waitSemaphoreCount++] = syncState->acquireImageSemaphore;
+        syncState->acquireImageSemaphoreSignalled = false;
+    }
     const VkSubmitInfo cbsinfo = {
         .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
         .pNext = NULL,
         .commandBufferCount = 1,
         .pCommandBuffers = &transitionBuffer,
         .signalSemaphoreCount = 1,
-        .waitSemaphoreCount = 1,
-        .pWaitDstStageMask = &wsmask,
-        .pWaitSemaphores = &syncState->semaphores.data[syncState->submits],
+        .waitSemaphoreCount = waitSemaphoreCount,
+        .pWaitDstStageMask = wsmask,
+        .pWaitSemaphores = waitSemaphores,
         .pSignalSemaphores = surface->presentSemaphores + surface->activeImageIndex
     };
+    
     
     WGPUFence finalTransitionFence = frameCache->finalTransitionFence;
     wgpuFenceAddRef(finalTransitionFence);
