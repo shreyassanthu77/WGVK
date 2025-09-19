@@ -5017,7 +5017,7 @@ void wgpuSurfaceGetCapabilities(WGPUSurface wgpuSurface, WGPUAdapter adapter, WG
         const VkColorSpaceKHR spaceToScan = toVulkanColorSpace(wgpuSurface->colorSpace, wgpuSurface->tonemappingMode);
         for(size_t i = 0;i < formatCount;i++){
             wgpuSurface->formatCache[i] = surfaceFormats[i];
-            //printf("[%s + %s]\n", colorSpaceString(surfaceFormats[i].colorSpace), vkFormatString(surfaceFormats[i].format));
+            printf("[%s + %s]\n", colorSpaceString(surfaceFormats[i].colorSpace), vkFormatString(surfaceFormats[i].format));
             
             if(surfaceFormats[i].colorSpace == spaceToScan && fromVulkanPixelFormat(surfaceFormats[i].format) != WGPUTextureFormat_Undefined){
                 wgpuSurface->wgpuFormatCache[wgpuSurface->wgpuFormatCount++] = fromVulkanPixelFormat(surfaceFormats[i].format);
@@ -7963,35 +7963,37 @@ void wgpuComputePassEncoderDispatchWorkgroupsIndirect(WGPUComputePassEncoder com
     EXIT();
 }
 void wgpuComputePassEncoderInsertDebugMarker(WGPUComputePassEncoder computePassEncoder, WGPUStringView markerLabel) {
-     ENTRY();
+    ENTRY();
 
-     EXIT();
+    EXIT();
 }
 void wgpuComputePassEncoderPopDebugGroup(WGPUComputePassEncoder computePassEncoder) {
-     ENTRY();
+    ENTRY();
 
-     EXIT();
+    EXIT();
 }
 void wgpuComputePassEncoderPushDebugGroup(WGPUComputePassEncoder computePassEncoder, WGPUStringView groupLabel) {
-     ENTRY();
+    ENTRY();
 
-     EXIT();
+    EXIT();
 }
 void wgpuComputePassEncoderSetLabel(WGPUComputePassEncoder computePassEncoder, WGPUStringView label) {
-     ENTRY();
+    ENTRY();
 
-     EXIT();
+    EXIT();
 }
 void wgpuComputePassEncoderAddRef(WGPUComputePassEncoder computePassEncoder) {
-     ENTRY();
+    ENTRY();
 
-     EXIT();
+    EXIT();
 }
 
 // Stubs for missing Methods of ComputePipeline
-WGPUBindGroupLayout wgpuComputePipelineGetBindGroupLayout(WGPUComputePipeline computePipeline, uint32_t groupIndex) {                                                                                                                       ENTRY();
-return NULL;                                                                                                                       EXIT();
-                                                                                                                                    }
+WGPUBindGroupLayout wgpuComputePipelineGetBindGroupLayout(WGPUComputePipeline computePipeline, uint32_t groupIndex) {
+    ENTRY();
+    return computePipeline->layout->bindGroupLayouts[groupIndex];
+    EXIT();
+}
 void wgpuComputePipelineSetLabel(WGPUComputePipeline computePipeline, WGPUStringView label) {
     ENTRY();
 
