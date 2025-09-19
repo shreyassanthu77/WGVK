@@ -19,7 +19,7 @@ A standalone, single-file, fully feature-conformant implementation WebGPU API in
 - ▓▓▓▓▓▓▓▓░░ 80% WGSL Reflection
 - ▓▓▓▓▓░░░░░ 50% HW Raytracing according to [Dawn-RT](https://github.com/maierfelix/dawn-ray-tracing/blob/master/RT_SPEC.md#GPURayTracingAccelerationInstanceDescriptor)
 
-For more detailed insights, join us on [Discord](https://discord.gg/gcNe3wmK)
+For more detailed insights, join us on [Discord](https://discord.gg/dK7FqBx7q8)
 
 ## Features
 
