@@ -3932,46 +3932,34 @@ void recordVkCommand(CommandBufferAndSomeState* destination_, const RenderPassCo
             const VkDeviceSize handleStride = (handleSize + (handleAlignment - 1)) & ~(handleAlignment - 1);
                 
             const VkDeviceAddress sbtBaseAddress = sbtBuffer->address;
-                
-            // --- Calculate the size of each SBT region based on offsets ---
-                
-            // The size of the ray-gen region is from its start to the start of the miss region.
+            
             VkDeviceSize rayGenRegionSize = traceRays->rayMissOffset - traceRays->rayGenerationOffset;
                 
-            // The size of the miss region is from its start to the start of the hit region.
             VkDeviceSize missRegionSize = traceRays->rayHitOffset - traceRays->rayMissOffset;
                 
-            // The size of the hit region is from its start to the end of the entire SBT buffer.
             VkDeviceSize hitRegionSize = totalSbtSize - traceRays->rayHitOffset;
                 
                 
-            // --- Configure the 4 strided device address regions ---
-                
-            // 1. Ray Generation Shader Binding Table
             const VkStridedDeviceAddressRegionKHR raygenSbtRegion = {
                 .deviceAddress = sbtBaseAddress + traceRays->rayGenerationOffset,
                 .stride        = handleStride,
                 .size          = rayGenRegionSize
             };
         
-            // 2. Miss Shader Binding Table
             const VkStridedDeviceAddressRegionKHR missSbtRegion = {
                 .deviceAddress = sbtBaseAddress + traceRays->rayMissOffset,
                 .stride        = handleStride,
                 .size          = missRegionSize
             };
         
-            // 3. Hit Shader Binding Table
             const VkStridedDeviceAddressRegionKHR hitSbtRegion = {
                 .deviceAddress = sbtBaseAddress + traceRays->rayHitOffset,
                 .stride        = handleStride,
                 .size          = hitRegionSize
             };
             
-            // 4. Callable Shader Binding Table (not supported by the locked traceRays signature)
             const VkStridedDeviceAddressRegionKHR callableSbtRegion = { .deviceAddress = 0, .stride = 0, .size = 0 };
         
-            // Dispatch the ray tracing command.
             device->functions.vkCmdTraceRaysKHR(
                 destinationVk,
                 &raygenSbtRegion,
@@ -9840,306 +9828,6 @@ RGAPI void releaseAllAndClear(ResourceUsage* resourceUsage){
 // WGPU Raytracing Begin =======================
 
 
-/*
-WGPUTopLevelAccelerationStructure wgpuDeviceCreateTopLevelAccelerationStructure(WGPUDevice device, const WGPUTopLevelAccelerationStructureDescriptor *descriptor) {
-    WGPUTopLevelAccelerationStructureImpl *impl = RL_CALLOC(1, sizeof(WGPUTopLevelAccelerationStructureImpl));
-    impl->device = device;
-    wgpuDeviceAddRef(device);
-
-    const size_t cacheIndex = device->submittedFrames % framesInFlight;
-    // Get acceleration structure properties
-    
-    //VkPhysicalDeviceAccelerationStructurePropertiesKHR accelerationStructureProperties = {};
-    //accelerationStructureProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_PROPERTIES_KHR;
-    //VkPhysicalDeviceProperties2 deviceProperties2 zeroinit;
-    //deviceProperties2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
-    //deviceProperties2.pNext = &accelerationStructureProperties;
-    //vkGetPhysicalDeviceProperties2(device->adapter->physicalDevice, &deviceProperties2);
-    
-    // Create instance buffer to hold instance data
-    const size_t instanceSize = sizeof(VkAccelerationStructureInstanceKHR);
-    const VkDeviceSize instanceBufferSize = instanceSize * descriptor->blasCount;
-
-
-    WGPUBufferDescriptor instanceBufferDescriptor = {
-        .size = instanceBufferSize,
-        .usage = WGPUBufferUsage_Raytracing,
-    };
-    impl->instancesBuffer = wgpuDeviceCreateBuffer(device, &instanceBufferDescriptor);
-
-    VkAccelerationStructureInstanceKHR *instanceData = NULL;
-    wgpuBufferMap(impl->instancesBuffer, 0, instanceBufferSize, 0, (void **)&instanceData);
-
-    for (uint32_t i = 0; i < descriptor->blasCount; i++) {
-        VkAccelerationStructureDeviceAddressInfoKHR addressInfo = {
-            .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR,
-            .accelerationStructure = descriptor->bottomLevelAS[i]->accelerationStructure,
-        };
-
-        uint64_t blasAddress = device->functions.vkGetAccelerationStructureDeviceAddressKHR(device->device, &addressInfo);
-
-        VkAccelerationStructureInstanceKHR* instance = &instanceData[i];
-        if (descriptor->transformMatrices) {
-            VkTransformMatrixKHR* dest = &instance->transform;
-            const VkTransformMatrixKHR* src = (const VkTransformMatrixKHR*)(descriptor->transformMatrices) + i;
-            memcpy(dest, src, sizeof(VkTransformMatrixKHR));
-        } else {
-            // Identity matrix
-            memset(&instance->transform, 0, sizeof(VkTransformMatrixKHR));
-            instance->transform.matrix[0][0] = 1.0f;
-            instance->transform.matrix[1][1] = 1.0f;
-            instance->transform.matrix[2][2] = 1.0f;
-        }
-
-        // Set instance data
-        instance->instanceCustomIndex = descriptor->instanceCustomIndexes ? descriptor->instanceCustomIndexes[i] : 0;
-        instance->mask = 0xFF; // Visible to all ray types by default
-        instance->instanceShaderBindingTableRecordOffset = descriptor->instanceShaderBindingTableRecordOffsets ? descriptor->instanceShaderBindingTableRecordOffsets[i] : 0;
-        instance->flags = descriptor->instanceFlags ? ((const VkGeometryInstanceFlagsKHR*)descriptor->instanceFlags)[i] : VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR;
-        instance->accelerationStructureReference = blasAddress;
-    }
-    wgpuBufferUnmap(impl->instancesBuffer);
-    
-    // Create acceleration structure geometry
-    VkAccelerationStructureGeometryKHR accelerationStructureGeometry = {};
-    accelerationStructureGeometry.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
-    accelerationStructureGeometry.geometryType = VK_GEOMETRY_TYPE_INSTANCES_KHR;
-    accelerationStructureGeometry.flags = VK_GEOMETRY_OPAQUE_BIT_KHR;
-
-    VkAccelerationStructureGeometryInstancesDataKHR instancesData = {};
-    instancesData.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR;
-    instancesData.arrayOfPointers = VK_FALSE;
-
-    VkBufferDeviceAddressInfo bufferDeviceAddressInfo = {};
-    bufferDeviceAddressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-    bufferDeviceAddressInfo.buffer = impl->instancesBuffer->buffer;
-    instancesData.data.deviceAddress = device->functions.vkGetBufferDeviceAddress(device->device, &bufferDeviceAddressInfo);
-
-    accelerationStructureGeometry.geometry.instances = instancesData;
-    // Build ranges
-    VkAccelerationStructureBuildRangeInfoKHR buildRangeInfo = {};
-    buildRangeInfo.primitiveCount = descriptor->blasCount; // Number of instances
-    buildRangeInfo.primitiveOffset = 0;
-    buildRangeInfo.firstVertex = 0;
-    buildRangeInfo.transformOffset = 0;
-
-    // Create acceleration structure build geometry info
-    VkAccelerationStructureBuildGeometryInfoKHR buildGeometryInfo = {};
-    buildGeometryInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
-    buildGeometryInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
-    buildGeometryInfo.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
-    buildGeometryInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
-    buildGeometryInfo.geometryCount = 1;
-    buildGeometryInfo.pGeometries = &accelerationStructureGeometry;
-
-    // Get required build sizes
-    VkAccelerationStructureBuildSizesInfoKHR buildSizesInfo = {};
-    buildSizesInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR;
-
-    device->functions.vkGetAccelerationStructureBuildSizesKHR(device->device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildGeometryInfo, &buildRangeInfo.primitiveCount, &buildSizesInfo);
-
-    // Create buffer for acceleration structure
-    WGPUBufferDescriptor bufferCreateInfo = {
-        .size = buildSizesInfo.accelerationStructureSize,
-        .usage = WGPUBufferUsage_AccelerationStructureStorage | WGPUBufferUsage_ShaderDeviceAddress,
-    };
-    impl->accelerationStructureBuffer = wgpuDeviceCreateBuffer(device, &bufferCreateInfo);
-
-    // Create the acceleration structure
-    VkAccelerationStructureCreateInfoKHR createInfo = {
-        .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR,
-        .buffer = impl->accelerationStructureBuffer->buffer,
-        .offset = 0,
-        .size = buildSizesInfo.accelerationStructureSize,
-        .type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR,
-    };
-
-    device->functions.vkCreateAccelerationStructureKHR(device->device, &createInfo, NULL, &impl->accelerationStructure);
-
-    // Create scratch buffer
-    WGPUBufferDescriptor scratchBufferCreateInfo = {
-        .size = buildSizesInfo.buildScratchSize,
-        .usage = WGPUBufferUsage_Storage | WGPUBufferUsage_ShaderDeviceAddress,
-    };
-    impl->scratchBuffer = wgpuDeviceCreateBuffer(device, &scratchBufferCreateInfo);
-
-    // Update build geometry info with scratch buffer
-    VkBufferDeviceAddressInfo scratchAddressInfo = {};
-    scratchAddressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-    scratchAddressInfo.buffer = impl->scratchBuffer->buffer;
-    buildGeometryInfo.scratchData.deviceAddress = device->functions.vkGetBufferDeviceAddress(device->device, &scratchAddressInfo);
-    buildGeometryInfo.dstAccelerationStructure = impl->accelerationStructure;
-
-    // Build the acceleration structure
-    VkCommandBufferAllocateInfo commandBufferAllocateInfo = {};
-    commandBufferAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    commandBufferAllocateInfo.commandPool = device->frameCaches[cacheIndex].commandPool;
-    commandBufferAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    commandBufferAllocateInfo.commandBufferCount = 1;
-
-    VkCommandBuffer commandBuffer;
-    device->functions.vkAllocateCommandBuffers(device->device, &commandBufferAllocateInfo, &commandBuffer);
-
-    VkCommandBufferBeginInfo beginInfo zeroinit;
-    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-
-    device->functions.vkBeginCommandBuffer(commandBuffer, &beginInfo);
-
-    const VkAccelerationStructureBuildRangeInfoKHR *pBuildRangeInfo = &buildRangeInfo;
-
-    device->functions.vkCmdBuildAccelerationStructuresKHR(commandBuffer, 1, &buildGeometryInfo, &pBuildRangeInfo);
-
-    device->functions.vkEndCommandBuffer(commandBuffer);
-
-    VkSubmitInfo submitInfo = {
-        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-        .commandBufferCount = 1,
-        .pCommandBuffers = &commandBuffer,
-    };
-    device->functions.vkQueueSubmit(device->queue->graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
-    return impl;
-}
-WGPUBottomLevelAccelerationStructure wgpuDeviceCreateBottomLevelAccelerationStructure(WGPUDevice device, const WGPUBottomLevelAccelerationStructureDescriptor *descriptor) {
-    WGPUBottomLevelAccelerationStructureImpl *impl = RL_CALLOC(1, sizeof(WGPUBottomLevelAccelerationStructureImpl));
-    impl->device = device;
-    wgpuDeviceAddRef(device);
-
-    const size_t cacheIndex = device->submittedFrames % framesInFlight;
-    // Get acceleration structure properties
-    VkPhysicalDeviceAccelerationStructurePropertiesKHR accelerationStructureProperties = {};
-    accelerationStructureProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_PROPERTIES_KHR;
-
-    VkPhysicalDeviceProperties2 deviceProperties2 zeroinit;
-    deviceProperties2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
-    deviceProperties2.pNext = &accelerationStructureProperties;
-
-    vkGetPhysicalDeviceProperties2(device->adapter->physicalDevice, &deviceProperties2);
-
-    // Create acceleration structure geometry
-    VkAccelerationStructureGeometryKHR accelerationStructureGeometry = {};
-    accelerationStructureGeometry.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
-    accelerationStructureGeometry.geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
-    accelerationStructureGeometry.flags = VK_GEOMETRY_OPAQUE_BIT_KHR;
-
-    VkAccelerationStructureGeometryTrianglesDataKHR trianglesData = {};
-    trianglesData.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR;
-    trianglesData.vertexFormat = VK_FORMAT_R32G32B32_SFLOAT;
-    VkBufferDeviceAddressInfo bdai1 = {
-        VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
-        NULL,
-        descriptor->vertexBuffer->buffer
-    };
-    device->functions.vkGetBufferDeviceAddress(device->device, &bdai1);
-
-    trianglesData.vertexData.deviceAddress = device->functions.vkGetBufferDeviceAddress(device->device, &bdai1);
-    trianglesData.vertexStride = descriptor->vertexStride;
-    trianglesData.maxVertex = descriptor->vertexCount - 1;
-
-    if (descriptor->indexBuffer) {
-        trianglesData.indexType = VK_INDEX_TYPE_UINT32;
-        VkBufferDeviceAddressInfo bdai2 = {
-            VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
-            NULL,
-            descriptor->indexBuffer->buffer
-        };
-        trianglesData.indexData.deviceAddress = device->functions.vkGetBufferDeviceAddress(device->device, &bdai2);
-    } else {
-        trianglesData.indexType = VK_INDEX_TYPE_NONE_KHR;
-    }
-
-    accelerationStructureGeometry.geometry.triangles = trianglesData;
-
-    // Build ranges
-    VkAccelerationStructureBuildRangeInfoKHR buildRangeInfo = {};
-    if (descriptor->indexBuffer) {
-        buildRangeInfo.primitiveCount = descriptor->indexCount / 3;
-    } else {
-        buildRangeInfo.primitiveCount = descriptor->vertexCount / 3;
-    }
-    buildRangeInfo.primitiveOffset = 0;
-    buildRangeInfo.firstVertex = 0;
-    buildRangeInfo.transformOffset = 0;
-
-    // Create acceleration structure build geometry info
-    VkAccelerationStructureBuildGeometryInfoKHR buildGeometryInfo = {};
-    buildGeometryInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
-    buildGeometryInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
-    buildGeometryInfo.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
-    buildGeometryInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
-    buildGeometryInfo.geometryCount = 1;
-    buildGeometryInfo.pGeometries = &accelerationStructureGeometry;
-
-    // Get required build sizes
-    VkAccelerationStructureBuildSizesInfoKHR buildSizesInfo = {};
-    buildSizesInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR;
-
-    device->functions.vkGetAccelerationStructureBuildSizesKHR(device->device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildGeometryInfo, &buildRangeInfo.primitiveCount, &buildSizesInfo);
-    // Create buffer for acceleration structure
-    WGPUBufferDescriptor bufferCreateInfo = {};
-    bufferCreateInfo.size = buildSizesInfo.accelerationStructureSize;
-    bufferCreateInfo.usage = WGPUBufferUsage_AccelerationStructureStorage | WGPUBufferUsage_ShaderDeviceAddress;
-
-    impl->accelerationStructureBuffer = wgpuDeviceCreateBuffer(device, &bufferCreateInfo);
-
-    // Create the acceleration structure
-    VkAccelerationStructureCreateInfoKHR createInfo = {};
-    createInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR;
-    createInfo.buffer = impl->accelerationStructureBuffer->buffer;
-    createInfo.offset = 0;
-    createInfo.size = buildSizesInfo.accelerationStructureSize;
-    createInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
-
-    device->functions.vkCreateAccelerationStructureKHR(device->device, &createInfo, NULL, &impl->accelerationStructure);
-
-    // Create scratch buffer
-    WGPUBufferDescriptor scratchBufferCreateInfo = {
-        .size = buildSizesInfo.buildScratchSize,
-        .usage = WGPUBufferUsage_Storage | WGPUBufferUsage_ShaderDeviceAddress | WGPUBufferUsage_AccelerationStructureInput,
-    };
-    impl->scratchBuffer = wgpuDeviceCreateBuffer(device, &scratchBufferCreateInfo);
-
-    // Update build geometry info with scratch buffer
-    VkBufferDeviceAddressInfo binfo3 = {
-        VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
-        NULL,
-        impl->scratchBuffer->buffer
-    };
-    buildGeometryInfo.scratchData.deviceAddress = device->functions.vkGetBufferDeviceAddress(device->device, &binfo3);
-    buildGeometryInfo.dstAccelerationStructure = impl->accelerationStructure;
-
-    // Build the acceleration structure
-    VkCommandBufferAllocateInfo commandBufferAllocateInfo = {};
-    commandBufferAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    commandBufferAllocateInfo.commandPool = device->frameCaches[cacheIndex].commandPool;
-    commandBufferAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    commandBufferAllocateInfo.commandBufferCount = 1;
-
-    VkCommandBuffer commandBuffer;
-    vkAllocateCommandBuffers(device->device, &commandBufferAllocateInfo, &commandBuffer);
-
-    VkCommandBufferBeginInfo beginInfo zeroinit;
-    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-
-    device->functions.vkBeginCommandBuffer(commandBuffer, &beginInfo);
-
-    const VkAccelerationStructureBuildRangeInfoKHR *pBuildRangeInfo = &buildRangeInfo;
-    device->functions.vkCmdBuildAccelerationStructuresKHR(commandBuffer, 1, &buildGeometryInfo, &pBuildRangeInfo);
-
-    device->functions.vkEndCommandBuffer(commandBuffer);
-
-    VkSubmitInfo submitInfo = {
-        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-        .commandBufferCount = 1,
-        .pCommandBuffers = &commandBuffer,
-    };
-
-    device->functions.vkQueueSubmit(device->queue->graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
-    device->functions.vkQueueWaitIdle(device->queue->graphicsQueue);
-    return impl;
-}
-*/
 
 //DEFINE_VECTOR(static inline, VkAccelerationStructureBuildGeometryInfoKHR, VkAccelerationStructureBuildGeometryInfoKHRVector)
 static inline VkRayTracingShaderGroupTypeKHR toVulkanShaderGroupType(WGPURayTracingShaderBindingTableGroupType type){
