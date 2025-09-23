@@ -1,5 +1,7 @@
 # WGVK
 
+[![CMake on multiple platforms](https://github.com/manuel5975p/WGVK/actions/workflows/cmake-multi-platform.yml/badge.svg)](https://github.com/manuel5975p/WGVK/actions/workflows/cmake-multi-platform.yml)
+
 <a href="https://opensource.org/licenses/MIT">
   <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT" height="25">
 </a>
