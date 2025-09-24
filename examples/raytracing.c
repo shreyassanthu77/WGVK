@@ -1,8 +1,6 @@
 #include "common.h"
-#include "vulkan/vulkan_core.h"
-#include "wgvk.h"
-#include <stdlib.h>
-#include <math.h>
+#include <wgvk.h>
+#include <wgvk_structs_impl.h>
 
 extern const char raygenSource[];
 extern const char rchitSource[];
@@ -96,6 +94,27 @@ int main(){
     WGPUShaderModule raygenModule = compileGLSLModule(base.device, raygenSource, WGPUShaderStage_RayGen);
     WGPUShaderModule rchitModule  = compileGLSLModule(base.device, rchitSource,  WGPUShaderStage_ClosestHit);
     WGPUShaderModule rmissModule  = compileGLSLModule(base.device, rmissSource,  WGPUShaderStage_Miss);
+
+
+    const VkRayTracingShaderGroupCreateInfoKHR sGroup = {
+        .sType = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR,
+        .anyHitShader = VK_SHADER_UNUSED_KHR,
+        .closestHitShader = 0,
+    };
+    
+    const VkRayTracingPipelineCreateInfoKHR vkrtdesc = {
+        .sType = VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_KHR,
+        .groupCount = 1,
+        .pGroups = &sGroup,
+    };
+
+    VkPipeline vkrtP = VK_NULL_HANDLE;
+    //VkResult result = base.device->functions.vkCreateRayTracingPipelinesKHR(base.device->device, VK_NULL_HANDLE, VK_NULL_HANDLE, 1, &vkrtdesc, NULL, &vkrtP);
+    //if(result != VK_SUCCESS){
+    //    abort();
+    //}
+    //result = base.device->functions.vkCmdTraceRaysKHR()
+
     WGPURayTracingShaderBindingTableStageDescriptor stages[3] = {
         {
             .stage = WGPUShaderStage_RayGen,
@@ -110,21 +129,38 @@ int main(){
             .module = rmissModule,
         }
     };
-    WGPURayTracingShaderBindingTableGroupDescriptor group = {
-        .type = WGPURayTracingShaderBindingTableGroupType_TrianglesHitGroup, 
-        .anyHitIndex = 0,
-        .closestHitIndex = 1,
-        .generalIndex = 0,
-        .intersectionIndex = 0,
+    WGPURayTracingShaderBindingTableGroupDescriptor groups[3] = {
+        {
+            .type = WGPURayTracingShaderBindingTableGroupType_General, 
+            .anyHitIndex = 0,
+            .closestHitIndex = 0,
+            .generalIndex = 0,
+            .intersectionIndex = 0,
+        },
+        {
+            .type = WGPURayTracingShaderBindingTableGroupType_TrianglesHitGroup, 
+            .anyHitIndex = 0,
+            .closestHitIndex = 1,
+            .generalIndex = 0,
+            .intersectionIndex = 0,
+        },
+        {
+            .type = WGPURayTracingShaderBindingTableGroupType_TrianglesHitGroup, 
+            .anyHitIndex = 0,
+            .closestHitIndex = 1,
+            .generalIndex = 0,
+            .intersectionIndex = 0,
+        },
     };
 
     WGPURayTracingShaderBindingTableDescriptor sbtableDesc = {
         .stageCount = 3,
         .stages = stages,
-        .groupCount = 1,
-        .groups = &group,
+        .groupCount = 3,
+        .groups = groups,
     };
     WGPURayTracingShaderBindingTable sbt = wgpuDeviceCreateRayTracingShaderBindingTable(base.device, &sbtableDesc);
+
     WGPURayTracingStateDescriptor rtState = {
         .shaderBindingTable = sbt,
         .maxPayloadSize = 64,
@@ -172,22 +208,68 @@ int main(){
     };
     WGPURaytracingPipeline rtPipeline = wgpuDeviceCreateRayTracingPipeline(base.device, &rtpDescriptor);
 
-    const WGPUTextureFormat rgba8u = WGPUTextureFormat_RGBA8Uint;
+    const WGPUTextureFormat storageTextureFormat = WGPUTextureFormat_RGBA32Float;
     WGPUTextureDescriptor storageTextureDescriptor = {
-        .usage = WGPUTextureUsage_StorageBinding,
+        .usage = WGPUTextureUsage_StorageBinding | WGPUTextureUsage_CopySrc,
         .dimension = WGPUTextureDimension_2D,
         .size = {
             .width = 1024,
             .height = 1024,
             .depthOrArrayLayers = 1
         },
-        .format = rgba8u,
+        .format = storageTextureFormat,
         .mipLevelCount = 1,
         .sampleCount = 1,
         .viewFormatCount = 1,
-        .viewFormats = &rgba8u,
+        .viewFormats = &storageTextureFormat,
     };
     WGPUTexture storageTexture = wgpuDeviceCreateTexture(base.device, &storageTextureDescriptor);
+    WGPUTextureViewDescriptor storageViewDescriptor = {
+        .format = storageTextureFormat,
+        .dimension = WGPUTextureViewDimension_2D,
+        .baseMipLevel = 0,
+        .mipLevelCount = 1,
+        .baseArrayLayer = 0,
+        .arrayLayerCount = 1,
+        .aspect = WGPUTextureAspect_All,
+        .usage = WGPUTextureUsage_StorageBinding | WGPUTextureUsage_CopySrc,
+    };
+
+    WGPUTextureView storageTextureView = wgpuTextureCreateView(storageTexture,  &storageViewDescriptor);
+    WGPUBuffer camerabuffer = wgpuDeviceCreateBuffer(base.device, &(const WGPUBufferDescriptor){
+        .size = 64,
+        .usage = WGPUBufferUsage_Uniform | WGPUBufferUsage_CopyDst
+    });
+    struct Vector4{float x,y,z,w;} cameraData[4] = {
+        {0, 0, -4, 0},
+        {0, 0, 0, 0},
+        {0, 1, 0, 0},
+        {1.1, 0, 0, 0},
+    };
+    wgpuQueueWriteBuffer(base.queue, camerabuffer, 0, cameraData, 64);
+
+    WGPUBindGroupEntry bindGroupEntries[3] = {
+        {
+            .binding = 0,
+            .accelerationStructure = tlas
+        },
+        {
+            .binding = 1,
+            .textureView = storageTextureView
+        },
+        {
+            .binding = 2,
+            .buffer = camerabuffer,
+            .size = WGPU_WHOLE_SIZE,
+        },
+    };
+
+    WGPUBindGroupDescriptor bgDesc = {
+        .layout = bgLayout,
+        .entries = bindGroupEntries,
+        .entryCount = 3,
+    };
+    WGPUBindGroup bindGroup = wgpuDeviceCreateBindGroup(base.device, &bgDesc);
     WGPUCommandEncoder cenc = wgpuDeviceCreateCommandEncoder(base.device, NULL);
     WGPURayTracingPassDescriptor rtDesc = {
         .maxRecursionDepth = 4,
@@ -196,10 +278,45 @@ int main(){
     };
     WGPURaytracingPassEncoder rtenc = wgpuCommandEncoderBeginRaytracingPass(cenc, &rtDesc);
     wgpuRaytracingPassEncoderSetPipeline(rtenc, rtPipeline);
-    wgpuRaytracingPassEncoderTraceRays(rtenc, 0, 32, 64, 1024, 1024, 1);
+    wgpuRaytracingPassEncoderSetBindGroup(rtenc, 0, bindGroup, 0, NULL);
+    wgpuRaytracingPassEncoderTraceRays(rtenc, 0, 1, 2, 1024, 1024, 1);
     wgpuRaytracingPassEncoderEnd(rtenc);
     WGPUCommandBuffer cbuffer =  wgpuCommandEncoderFinish(cenc, NULL);
     wgpuQueueSubmit(base.queue, 1, &cbuffer);
+    WGPUBuffer textureDump = wgpuDeviceCreateBuffer(base.device, &(const WGPUBufferDescriptor){
+        .size = 1024 * 1024 * 16,
+        .usage = WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst
+    });
+    {
+        WGPUTexelCopyTextureInfo source = {
+            .texture = storageTexture,
+            .mipLevel = 0,
+            .origin = {0},
+            .aspect = WGPUTextureAspect_All,
+        };
+        WGPUTexelCopyBufferInfo dest = {
+            .buffer = textureDump,
+            .layout = {
+                .bytesPerRow = 0,
+                .rowsPerImage = 0,
+                .offset = 0,
+            }
+        };
+        WGPUCommandEncoder dumpEnc = wgpuDeviceCreateCommandEncoder(base.device, NULL);
+        WGPUExtent3D copySize = {
+            1024, 1024, 1
+        };
+        wgpuCommandEncoderCopyTextureToBuffer(dumpEnc, &source, &dest, &copySize);
+        WGPUCommandBuffer buffer = wgpuCommandEncoderFinish(dumpEnc, NULL);
+        wgpuQueueSubmit(base.queue, 1, &buffer);
+        wgpuCommandEncoderRelease(dumpEnc);
+        wgpuCommandBufferRelease(buffer);
+        struct Vector4{float x,y,z,w;}* mapPointer = NULL;
+        wgpuBufferMap(textureDump, WGPUMapMode_Read, 0, WGPU_WHOLE_MAP_SIZE, (void**)&mapPointer);
+        for(size_t i = 0;i < 1024 * 1024;i++){
+            printf("%f, ", mapPointer[i].x);
+        }
+    }
 }
 
 
@@ -210,7 +327,7 @@ const char raygenSource[] = R"(#version 460
 // Binding for acceleration structure
 layout(binding = 0) uniform accelerationStructureEXT topLevelAS;
 // Output image
-layout(binding = 1, rgba8) uniform image2D image;
+layout(binding = 1, rgba32f) uniform image2D image;
 // Camera uniform buffer
 
 
@@ -239,7 +356,7 @@ void main() {
     float factor = tan(camera.fovY.x * 0.5f);
     vec3 raydirection = normalize(direction + factor * d.x * left + factor * d.y * realup);
 
-    payload = vec4(target.yx, 0.3f, 1);
+    payload = vec4(raydirection.yx, 0.3f, 1);
     // Initialize payload
 
     // Trace ray
