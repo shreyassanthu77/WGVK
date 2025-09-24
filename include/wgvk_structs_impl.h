@@ -1671,6 +1671,7 @@ DEFINE_PTR_HASH_SET (CONTAINERAPI, RenderBundleUsageSet, WGPURenderBundle)
 DEFINE_PTR_HASH_SET (CONTAINERAPI, QuerySetUsageSet, WGPUQuerySet)
 DEFINE_PTR_HASH_SET (CONTAINERAPI, WGPUComputePassEncoderSet, WGPUComputePassEncoder)
 DEFINE_PTR_HASH_SET (CONTAINERAPI, WGPURaytracingPassEncoderSet, WGPURaytracingPassEncoder)
+DEFINE_PTR_HASH_SET (CONTAINERAPI, WGPURayTracingAccelerationContainerSet, WGPURayTracingAccelerationContainer)
 
 DEFINE_VECTOR (static inline, VkDynamicState, VkDynamicStateVector)
 DEFINE_VECTOR (CONTAINERAPI, VkWriteDescriptorSet, VkWriteDescriptorSetVector)
@@ -1722,6 +1723,7 @@ typedef struct ResourceUsage{
     RaytracingPipelineUsageSet referencedRaytracingPipelines;
     RenderBundleUsageSet referencedRenderBundles;
     QuerySetUsageSet referencedQuerySets;
+    WGPURayTracingAccelerationContainerSet referencedAccelerationStructures;
     //LayoutAssumptions entryAndFinalLayouts;
 }ResourceUsage;
 
@@ -1760,28 +1762,29 @@ static inline void ResourceUsage_init(ResourceUsage* ru){
     //LayoutAssumptions_init(&ru->entryAndFinalLayouts);
 }
 
-RGAPI void ru_registerTransition   (ResourceUsage* resourceUsage, WGPUTexture tex, VkImageLayout from, VkImageLayout to);
-RGAPI void ru_trackBuffer          (ResourceUsage* resourceUsage, WGPUBuffer buffer, BufferUsageRecord brecord);
-RGAPI void ru_trackTexture         (ResourceUsage* resourceUsage, WGPUTexture texture, ImageUsageRecord newRecord);
-RGAPI void ru_trackTextureView     (ResourceUsage* resourceUsage, WGPUTextureView view);
-RGAPI void ru_trackBindGroup       (ResourceUsage* resourceUsage, WGPUBindGroup bindGroup);
-RGAPI void ru_trackBindGroupLayout (ResourceUsage* resourceUsage, WGPUBindGroupLayout bindGroupLayout);
-RGAPI void ru_trackSampler         (ResourceUsage* resourceUsage, WGPUSampler sampler);
-RGAPI void ru_trackRenderPipeline  (ResourceUsage* resourceUsage, WGPURenderPipeline rpl);
-RGAPI void ru_trackComputePipeline (ResourceUsage* resourceUsage, WGPUComputePipeline computePipeline);
-RGAPI void ru_trackQuerySet        (ResourceUsage* resourceUsage, WGPUQuerySet computePipeline);
-RGAPI void ru_trackRenderBundle    (ResourceUsage* resourceUsage, WGPURenderBundle computePipeline);
+RGAPI void ru_registerTransition        (ResourceUsage* resourceUsage, WGPUTexture tex, VkImageLayout from, VkImageLayout to);
+RGAPI void ru_trackBuffer               (ResourceUsage* resourceUsage, WGPUBuffer buffer, BufferUsageRecord brecord);
+RGAPI void ru_trackTexture              (ResourceUsage* resourceUsage, WGPUTexture texture, ImageUsageRecord newRecord);
+RGAPI void ru_trackTextureView          (ResourceUsage* resourceUsage, WGPUTextureView view);
+RGAPI void ru_trackBindGroup            (ResourceUsage* resourceUsage, WGPUBindGroup bindGroup);
+RGAPI void ru_trackBindGroupLayout      (ResourceUsage* resourceUsage, WGPUBindGroupLayout bindGroupLayout);
+RGAPI void ru_trackSampler              (ResourceUsage* resourceUsage, WGPUSampler sampler);
+RGAPI void ru_trackRenderPipeline       (ResourceUsage* resourceUsage, WGPURenderPipeline rpl);
+RGAPI void ru_trackComputePipeline      (ResourceUsage* resourceUsage, WGPUComputePipeline computePipeline);
+RGAPI void ru_trackQuerySet             (ResourceUsage* resourceUsage, WGPUQuerySet computePipeline);
+RGAPI void ru_trackRenderBundle         (ResourceUsage* resourceUsage, WGPURenderBundle computePipeline);
+RGAPI void ru_trackAccelerationStructure(ResourceUsage* resourceUsage, WGPURayTracingAccelerationContainer accelerationStructure);
 
-RGAPI void ce_trackBuffer(WGPUCommandEncoder encoder, WGPUBuffer buffer, BufferUsageSnap usage);
-RGAPI void ce_trackTexture(WGPUCommandEncoder encoder, WGPUTexture texture, ImageUsageSnap usage);
-RGAPI void ce_trackTextureView(WGPUCommandEncoder encoder, WGPUTextureView view, ImageUsageSnap usage);
+RGAPI void ce_trackBuffer               (WGPUCommandEncoder encoder, WGPUBuffer buffer, BufferUsageSnap usage);
+RGAPI void ce_trackTexture              (WGPUCommandEncoder encoder, WGPUTexture texture, ImageUsageSnap usage);
+RGAPI void ce_trackTextureView          (WGPUCommandEncoder encoder, WGPUTextureView view, ImageUsageSnap usage);
 
-RGAPI Bool32 ru_containsBuffer         (const ResourceUsage* resourceUsage, WGPUBuffer buffer);
-RGAPI Bool32 ru_containsTexture        (const ResourceUsage* resourceUsage, WGPUTexture texture);
-RGAPI Bool32 ru_containsTextureView    (const ResourceUsage* resourceUsage, WGPUTextureView view);
-RGAPI Bool32 ru_containsBindGroup      (const ResourceUsage* resourceUsage, WGPUBindGroup bindGroup);
-RGAPI Bool32 ru_containsBindGroupLayout(const ResourceUsage* resourceUsage, WGPUBindGroupLayout bindGroupLayout);
-RGAPI Bool32 ru_containsSampler        (const ResourceUsage* resourceUsage, WGPUSampler bindGroup);
+RGAPI Bool32 ru_containsBuffer          (const ResourceUsage* resourceUsage, WGPUBuffer buffer);
+RGAPI Bool32 ru_containsTexture         (const ResourceUsage* resourceUsage, WGPUTexture texture);
+RGAPI Bool32 ru_containsTextureView     (const ResourceUsage* resourceUsage, WGPUTextureView view);
+RGAPI Bool32 ru_containsBindGroup       (const ResourceUsage* resourceUsage, WGPUBindGroup bindGroup);
+RGAPI Bool32 ru_containsBindGroupLayout (const ResourceUsage* resourceUsage, WGPUBindGroupLayout bindGroupLayout);
+RGAPI Bool32 ru_containsSampler         (const ResourceUsage* resourceUsage, WGPUSampler bindGroup);
 
 RGAPI void releaseAllAndClear(ResourceUsage* resourceUsage);
 
@@ -2083,6 +2086,7 @@ typedef struct WGPURayTracingShaderBindingTableImpl{
 typedef struct WGPURayTracingAccelerationContainerImpl{
     VkAccelerationStructureKHR accelerationStructure;
     WGPUDevice device;
+    refcount_type refCount;
     uint32_t geometryCount;
     WGPUBuffer* inputGeometryBuffers;
     VkAccelerationStructureGeometryKHR* geometries;

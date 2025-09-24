@@ -685,24 +685,22 @@ char* sw_sprintf(const char* format, ...) {
 
 WGPUStatus wgpuDeviceGetAdapterInfo(WGPUDevice device, WGPUAdapterInfo* adapterInfo) WGPU_FUNCTION_ATTRIBUTE {
     ENTRY();
-    // 1. Validate input parameters
     if (device == NULL || adapterInfo == NULL || device->adapter == NULL || device->adapter->physicalDevice == VK_NULL_HANDLE) {
-        // Return an error if any required input or internal pointer is null
         return WGPUStatus_Error;
     }
     VkPhysicalDeviceSubgroupProperties subgroupProperties = {
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES,
-        .pNext = NULL // Ensure pNext is null if no further structures are chained
+        .pNext = NULL
     };
     VkPhysicalDeviceProperties2KHR deviceProperties2 = {
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
-        .pNext = &subgroupProperties // Chain subgroupProperties here
+        .pNext = &subgroupProperties
     };
 
     vkGetPhysicalDeviceProperties2(device->adapter->physicalDevice, &deviceProperties2);
 
     strncpy(device->adapter->cachedDeviceName, deviceProperties2.properties.deviceName, VK_MAX_PHYSICAL_DEVICE_NAME_SIZE);
-    device->adapter->cachedDeviceName[VK_MAX_PHYSICAL_DEVICE_NAME_SIZE - 1] = '\0'; // Explicitly null-terminate
+    device->adapter->cachedDeviceName[VK_MAX_PHYSICAL_DEVICE_NAME_SIZE - 1] = '\0';
     
 
     // Set the WGPUStringView to point to the stable, cached string.
@@ -742,7 +740,7 @@ WGPUStatus wgpuAdapterGetLimits(WGPUAdapter adapter, WGPULimits* limits) WGPU_FU
     limits->maxTextureArrayLayers = deviceProperties2.properties.limits.maxImageArrayLayers;
     limits->maxBindGroups = deviceProperties2.properties.limits.maxBoundDescriptorSets;
     limits->maxBindGroupsPlusVertexBuffers = deviceProperties2.properties.limits.maxBoundDescriptorSets + deviceProperties2.properties.limits.maxVertexInputBindings;
-    limits->maxBindingsPerBindGroup = deviceProperties2.properties.limits.maxPerStageResources;
+    limits->maxBindingsPerBindGroup = deviceProperties2.properties.limits.maxDescriptorSetStorageBuffers;
     limits->maxDynamicUniformBuffersPerPipelineLayout = deviceProperties2.properties.limits.maxDescriptorSetUniformBuffersDynamic;
     limits->maxDynamicStorageBuffersPerPipelineLayout = deviceProperties2.properties.limits.maxDescriptorSetStorageBuffersDynamic;
     limits->maxSampledTexturesPerShaderStage = deviceProperties2.properties.limits.maxPerStageDescriptorSampledImages;
@@ -2645,7 +2643,7 @@ void wgpuWriteBindGroup(WGPUDevice device, WGPUBindGroup wvBindGroup, const WGPU
                 ru_trackBuffer(&wvBindGroup->resourceUsage, bufferOfThatEntry, (BufferUsageRecord){0, 0, VK_FALSE});
                 bufferInfos.data[i].buffer = bufferOfThatEntry->buffer;
                 bufferInfos.data[i].offset = bgdesc->entries[i].offset;
-                bufferInfos.data[i].range  =  bgdesc->entries[i].size;
+                bufferInfos.data[i].range  = bgdesc->entries[i].size;
                 writes.data[i].pBufferInfo = bufferInfos.data + i;
             }break;
 
@@ -2665,6 +2663,13 @@ void wgpuWriteBindGroup(WGPUDevice device, WGPUBindGroup wvBindGroup, const WGPU
                 ru_trackSampler(&wvBindGroup->resourceUsage, bgdesc->entries[i].sampler);
                 imageInfos.data[i].sampler    = bgdesc->entries[i].sampler->sampler;
                 writes.    data[i].pImageInfo = imageInfos.data + i;
+            }break;
+            case VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR:{
+                ru_trackAccelerationStructure(&wvBindGroup->resourceUsage, bgdesc->entries[i].accelerationStructure);
+                accelStructInfos.data[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR;
+                accelStructInfos.data[i].accelerationStructureCount = 1;
+                accelStructInfos.data[i].pAccelerationStructures = &(bgdesc->entries[i].accelerationStructure->accelerationStructure);
+                writes.          data[i].pNext = accelStructInfos.data + i;
             }break;
             default:
             rg_unreachable();
@@ -2706,7 +2711,9 @@ WGPUBindGroup wgpuDeviceCreateBindGroup(WGPUDevice device, const WGPUBindGroupDe
         uint32_t counts[DESCRIPTOR_TYPE_UPPER_LIMIT] = {0};
 
         for(uint32_t i = 0;i < bgdesc->layout->entryCount;i++){
-            ++counts[extractVkDescriptorType(bgdesc->layout->entries + i)];
+            const VkDescriptorType vkdt = extractVkDescriptorType(bgdesc->layout->entries + i);
+            const uint32_t contiguousIndex = descriptorTypeContiguous(vkdt);
+            ++counts[contiguousIndex];
         }
         VkDescriptorPoolSize sizes[DESCRIPTOR_TYPE_UPPER_LIMIT];
         uint32_t VkDescriptorPoolSizeCount = 0;
@@ -3929,33 +3936,37 @@ void recordVkCommand(CommandBufferAndSomeState* destination_, const RenderPassCo
             const VkPhysicalDeviceRayTracingPipelinePropertiesKHR* rtProperties = &device->adapter->rayTracingPipelineProperties;
             const uint32_t handleSize = rtProperties->shaderGroupHandleSize;
             const uint32_t handleAlignment = rtProperties->shaderGroupBaseAlignment;
+
+            // handleStride is usually 32
             const VkDeviceSize handleStride = (handleSize + (handleAlignment - 1)) & ~(handleAlignment - 1);
                 
             const VkDeviceAddress sbtBaseAddress = sbtBuffer->address;
-            
-            VkDeviceSize rayGenRegionSize = traceRays->rayMissOffset - traceRays->rayGenerationOffset;
-                
+
+            char groupDump_[32 * 3] = {0};
+            void* groupDump = groupDump_;
+            device->functions.vkGetRayTracingShaderGroupHandlesKHR(device->device, pipeline->raytracingPipeline, 0, 3, 32 * 3, groupDump);
+
+            VkDeviceSize rayGenRegionSize = traceRays->rayMissOffset - traceRays->rayGenerationOffset;    
             VkDeviceSize missRegionSize = traceRays->rayHitOffset - traceRays->rayMissOffset;
-                
             VkDeviceSize hitRegionSize = totalSbtSize - traceRays->rayHitOffset;
                 
                 
             const VkStridedDeviceAddressRegionKHR raygenSbtRegion = {
-                .deviceAddress = sbtBaseAddress + traceRays->rayGenerationOffset,
+                .deviceAddress = sbtBaseAddress + traceRays->rayGenerationOffset * handleStride,
                 .stride        = handleStride,
-                .size          = rayGenRegionSize
+                .size          = 32
             };
         
             const VkStridedDeviceAddressRegionKHR missSbtRegion = {
-                .deviceAddress = sbtBaseAddress + traceRays->rayMissOffset,
+                .deviceAddress = sbtBaseAddress + traceRays->rayMissOffset * handleStride,
                 .stride        = handleStride,
-                .size          = missRegionSize
+                .size          = 32
             };
         
             const VkStridedDeviceAddressRegionKHR hitSbtRegion = {
-                .deviceAddress = sbtBaseAddress + traceRays->rayHitOffset,
+                .deviceAddress = sbtBaseAddress + traceRays->rayHitOffset * handleStride,
                 .stride        = handleStride,
-                .size          = hitRegionSize
+                .size          = 32
             };
             
             const VkStridedDeviceAddressRegionKHR callableSbtRegion = { .deviceAddress = 0, .stride = 0, .size = 0 };
@@ -5005,7 +5016,7 @@ void wgpuSurfaceGetCapabilities(WGPUSurface wgpuSurface, WGPUAdapter adapter, WG
         const VkColorSpaceKHR spaceToScan = toVulkanColorSpace(wgpuSurface->colorSpace, wgpuSurface->tonemappingMode);
         for(size_t i = 0;i < formatCount;i++){
             wgpuSurface->formatCache[i] = surfaceFormats[i];
-            printf("[%s + %s]\n", colorSpaceString(surfaceFormats[i].colorSpace), vkFormatString(surfaceFormats[i].format));
+            //printf("[%s + %s]\n", colorSpaceString(surfaceFormats[i].colorSpace), vkFormatString(surfaceFormats[i].format));
             
             if(surfaceFormats[i].colorSpace == spaceToScan && fromVulkanPixelFormat(surfaceFormats[i].format) != WGPUTextureFormat_Undefined){
                 wgpuSurface->wgpuFormatCache[wgpuSurface->wgpuFormatCount++] = fromVulkanPixelFormat(surfaceFormats[i].format);
@@ -6389,13 +6400,77 @@ WGPURaytracingPassEncoder wgpuCommandEncoderBeginRaytracingPass(WGPUCommandEncod
     RenderPassCommandGenericVector_init(&rtenc->bufferedCommands);
     rtenc->cmdEncoder = enc;
     rtenc->cmdBuffer = enc->buffer;
-    return rtenc;
     EXIT();
+    return rtenc;
 }
 
-void wgpuRaytracingPassEncoderEnd(WGPURaytracingPassEncoder commandEncoder){
+void wgpuRaytracingPassEncoderEnd(WGPURaytracingPassEncoder rtPassEncoder){
     ENTRY();
-    recordVkCommands(commandEncoder->cmdEncoder, commandEncoder->device, &commandEncoder->bufferedCommands, NULL);
+    for(size_t i = 0;i < rtPassEncoder->bufferedCommands.size;i++){
+        const RenderPassCommandGeneric* cmd = &rtPassEncoder->bufferedCommands.data[i];
+        if(cmd->type == rp_command_type_set_bind_group){
+            const RenderPassCommandSetBindGroup* cmdSetBindGroup = &cmd->setBindGroup;
+            const WGPUBindGroup       group  = cmdSetBindGroup->group;
+            const WGPUBindGroupLayout layout = group->layout;
+            for(uint32_t bindingIndex = 0;bindingIndex < layout->entryCount;bindingIndex++){
+
+                wgvk_assert(group->entries[bindingIndex].binding == layout->entries[bindingIndex].binding, "Mismatch between layout and group, this will cause bugs.");
+                
+                const WGPUBindGroupEntry*       groupEntry  = &group ->entries[bindingIndex];
+                const WGPUBindGroupLayoutEntry* layoutEntry = &layout->entries[bindingIndex];
+
+                //uniform_type eType = layout->entries[bindingIndex].type;
+                if(layout->entries[bindingIndex].buffer.type != WGPUBufferBindingType_BindingNotUsed){
+                    wgvk_assert(group->entries[bindingIndex].buffer, "Layout indicates buffer but no buffer passed");
+                    WGPUShaderStage visibility = layout->entries[bindingIndex].visibility;
+                    wgvk_assert(visibility, "Empty visibility goddamnit");
+                    ce_trackBuffer(
+                        rtPassEncoder->cmdEncoder,
+                        group->entries[bindingIndex].buffer,
+                        (BufferUsageSnap){
+                            .access = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
+                            //.access = access_to_vk[layout->entries[bindingIndex].access], //TODO
+                            .stage = toVulkanPipelineStageBits(visibility)
+                        }
+                    );
+                }
+
+                else if(layout->entries[bindingIndex].texture.sampleType != WGPUTextureSampleType_BindingNotUsed){
+                    WGPUShaderStage visibility = layout->entries[bindingIndex].visibility;
+                    wgvk_assert(visibility, "Empty visibility goddamnit");
+                    if(visibility == 0){ //TODO: Get rid of this hack
+                        visibility = (WGPUShaderStage_Vertex | WGPUShaderStage_Fragment | WGPUShaderStage_Compute);
+                    }
+                    ce_trackTextureView(
+                        rtPassEncoder->cmdEncoder,
+                        group->entries[bindingIndex].textureView,
+                        (ImageUsageSnap){
+                            .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                            .access = VK_ACCESS_SHADER_READ_BIT,
+                            .stage = toVulkanPipelineStageBits(visibility)
+                        }
+                    );
+                }
+                else if(layout->entries[bindingIndex].storageTexture.access != WGPUStorageTextureAccess_BindingNotUsed){
+                    WGPUShaderStage visibility = layout->entries[bindingIndex].visibility;
+                    wgvk_assert(visibility, "Empty visibility goddamnit");
+                    if(visibility == 0){ //TODO: Get rid of this hack
+                        visibility = (WGPUShaderStage_Vertex | WGPUShaderStage_Fragment | WGPUShaderStage_Compute);
+                    }
+                    ce_trackTextureView(
+                        rtPassEncoder->cmdEncoder,
+                        group->entries[bindingIndex].textureView,
+                        (ImageUsageSnap){
+                            .layout = VK_IMAGE_LAYOUT_GENERAL,
+                            .access = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
+                            .stage = toVulkanPipelineStageBits(visibility)
+                        }
+                    );
+                }
+            }
+        }
+    }
+    recordVkCommands(rtPassEncoder->cmdEncoder, rtPassEncoder->device, &rtPassEncoder->bufferedCommands, NULL);
     EXIT();
 }
 void wgpuFenceReset(WGPUFence fence){
@@ -6958,6 +7033,11 @@ RGAPI void ru_trackSampler         (ResourceUsage* resourceUsage, WGPUSampler sa
     }
 }
 
+RGAPI void ru_trackAccelerationStructure(ResourceUsage* resourceUsage, WGPURayTracingAccelerationContainer accelerationStructure){
+    if(WGPURayTracingAccelerationContainerSet_add(&resourceUsage->referencedAccelerationStructures, accelerationStructure)){
+        ++accelerationStructure->refCount;
+    }
+}
 typedef enum barrierType{
     bt_no_barrier = 0,
     bt_buffer_barrier = 1,
@@ -7658,12 +7738,16 @@ void wgpuAdapterInfoFreeMembers(WGPUAdapterInfo value) {
     (void)value;
     EXIT();
 }
-WGPUStatus wgpuGetInstanceCapabilities(WGPUInstanceCapabilities * capabilities) {                                                                                   ENTRY();
-return WGPUStatus_Error;                                                                                   EXIT();
-                                                                                                            }
-WGPUProc wgpuGetProcAddress(WGPUStringView procName) {                                                        ENTRY();
-return NULL;                                                        EXIT();
-                                                                     }
+WGPUStatus wgpuGetInstanceCapabilities(WGPUInstanceCapabilities * capabilities) {
+    ENTRY();
+    EXIT();
+    return WGPUStatus_Error;
+}
+WGPUProc wgpuGetProcAddress(WGPUStringView procName) {
+    ENTRY();
+    EXIT();
+    return NULL;
+}
 void wgpuSupportedFeaturesFreeMembers(WGPUSupportedFeatures value) {
     ENTRY();
     if(value.features){
@@ -7786,6 +7870,23 @@ WGPUStatus wgpuAdapterGetInfo(WGPUAdapter adapter, WGPUAdapterInfo* info) {
     }
     
     // Query Vulkan for the physical device properties.
+    if (adapter == NULL || info == NULL || adapter->physicalDevice == VK_NULL_HANDLE) {
+        return WGPUStatus_Error;
+    }
+    VkPhysicalDeviceSubgroupProperties subgroupProperties = {
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES,
+        .pNext = NULL
+    };
+    VkPhysicalDeviceProperties2KHR deviceProperties2 = {
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
+        .pNext = &subgroupProperties
+    };
+
+    vkGetPhysicalDeviceProperties2(adapter->physicalDevice, &deviceProperties2);
+
+    strncpy(adapter->cachedDeviceName, deviceProperties2.properties.deviceName, VK_MAX_PHYSICAL_DEVICE_NAME_SIZE);
+    adapter->cachedDeviceName[VK_MAX_PHYSICAL_DEVICE_NAME_SIZE - 1] = '\0';
+    
     VkPhysicalDeviceProperties props;
     vkGetPhysicalDeviceProperties(adapter->physicalDevice, &props);
 
@@ -8334,33 +8435,43 @@ void wgpuDeviceGetFeatures(WGPUDevice device, WGPUSupportedFeatures * features) 
 
      EXIT();
 }
-WGPUStatus wgpuDeviceGetLimits(WGPUDevice device, WGPULimits * limits) {                                                                          ENTRY();
-return WGPUStatus_Error;                                                                          EXIT();
-                                                                                                   }
-WGPUFuture wgpuDeviceGetLostFuture(WGPUDevice device) {                                                         ENTRY();
-return (WGPUFuture){0};                                                         EXIT();
-                                                                                 }
-WGPUBool wgpuDeviceHasFeature(WGPUDevice device, WGPUFeatureName feature) {                                                                             ENTRY();
-return 0;                                                                             EXIT();
-                                                                                       }
-WGPUFuture wgpuDevicePopErrorScope(WGPUDevice device, WGPUPopErrorScopeCallbackInfo callbackInfo) {                                                                                                     ENTRY();
-return (WGPUFuture){0};                                                                                                     EXIT();
-                                                                                                                             }
+WGPUStatus wgpuDeviceGetLimits(WGPUDevice device, WGPULimits * limits) {
+    ENTRY();
+    EXIT();
+    return WGPUStatus_Error;
+}
+WGPUFuture wgpuDeviceGetLostFuture(WGPUDevice device) {
+    ENTRY();
+    EXIT();
+    return (WGPUFuture){0};
+}
+WGPUBool wgpuDeviceHasFeature(WGPUDevice device, WGPUFeatureName feature) {
+    ENTRY();
+    EXIT();
+    return 0;
+}
+WGPUFuture wgpuDevicePopErrorScope(WGPUDevice device, WGPUPopErrorScopeCallbackInfo callbackInfo) {
+    ENTRY();
+    EXIT();
+    return (WGPUFuture){0};
+}
 void wgpuDevicePushErrorScope(WGPUDevice device, WGPUErrorFilter filter) {
-     ENTRY();
+    ENTRY();
 
-     EXIT();
+    EXIT();
 }
 void wgpuDeviceSetLabel(WGPUDevice device, WGPUStringView label) {
-     ENTRY();
+    ENTRY();
 
-     EXIT();
+    EXIT();
 }
 
 // Stubs for missing Methods of Instance
-WGPUStatus wgpuInstanceGetWGSLLanguageFeatures(WGPUInstance instance, WGPUSupportedWGSLLanguageFeatures * features) {                                                                                                                       ENTRY();
-return WGPUStatus_Error;                                                                                                                       EXIT();
-                                                                                                                                                }
+WGPUStatus wgpuInstanceGetWGSLLanguageFeatures(WGPUInstance instance, WGPUSupportedWGSLLanguageFeatures * features) {
+    ENTRY();
+    EXIT();
+    return WGPUStatus_Error;
+}
 WGPUBool wgpuInstanceHasWGSLLanguageFeature(WGPUInstance instance, WGPUWGSLLanguageFeatureName feature) {
     ENTRY();
     EXIT();
@@ -8388,9 +8499,11 @@ uint32_t wgpuQuerySetGetCount(WGPUQuerySet querySet) {
     EXIT();
     return 0;
 }
-WGPUQueryType wgpuQuerySetGetType(WGPUQuerySet querySet) {                                                            ENTRY();
-return querySet->type;                                                            EXIT();
-                                                                                   }
+WGPUQueryType wgpuQuerySetGetType(WGPUQuerySet querySet) {
+    ENTRY();
+    EXIT();
+    return querySet->type;
+}
 void wgpuQuerySetSetLabel(WGPUQuerySet querySet, WGPUStringView label) {
     ENTRY();
 
@@ -9871,18 +9984,28 @@ WGPURayTracingShaderBindingTable wgpuDeviceCreateRayTracingShaderBindingTable(WG
     ret->shaderGroups = RL_CALLOC(descriptor->groupCount, sizeof(VkRayTracingShaderGroupCreateInfoKHR));
     ret->shaderGroupCount = descriptor->groupCount;
     for(uint32_t i = 0;i < descriptor->groupCount;i++){
-        ret->shaderGroups[i] = CLITERAL(VkRayTracingShaderGroupCreateInfoKHR){
+        const WGPURayTracingShaderBindingTableGroupDescriptor* group_i = descriptor->groups + i;
+        const VkRayTracingShaderGroupTypeKHR vkShaderGroupType = toVulkanShaderGroupType(group_i->type);
+        
+        VkRayTracingShaderGroupCreateInfoKHR insert = {
             .sType = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR,
-            .type = toVulkanShaderGroupType(descriptor->groups[i].type),
-            .generalShader = descriptor->groups[i].generalIndex,
-            .closestHitShader = descriptor->groups[i].closestHitIndex,
-            .anyHitShader = descriptor->groups[i].anyHitIndex,
-            .intersectionShader = descriptor->groups[i].intersectionIndex,
+            .type = vkShaderGroupType,
+            .generalShader = group_i->generalIndex,
+            .closestHitShader = group_i->closestHitIndex,
+            .anyHitShader = group_i->anyHitIndex,
+            .intersectionShader = group_i->intersectionIndex,
         };
-        if(ret->shaderGroups[i].type == VK_RAY_TRACING_SHADER_GROUP_TYPE_TRIANGLES_HIT_GROUP_KHR){
-            ret->shaderGroups[i].intersectionShader = VK_SHADER_UNUSED_KHR;
-            ret->shaderGroups[i].anyHitShader = VK_SHADER_UNUSED_KHR;
+        if(vkShaderGroupType == VK_RAY_TRACING_SHADER_GROUP_TYPE_TRIANGLES_HIT_GROUP_KHR){
+            insert.intersectionShader = VK_SHADER_UNUSED_KHR;
+            insert.anyHitShader = VK_SHADER_UNUSED_KHR;
         }
+        else if(vkShaderGroupType == VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR){
+            insert.anyHitShader = VK_SHADER_UNUSED_KHR;
+            insert.closestHitShader = VK_SHADER_UNUSED_KHR;
+            insert.intersectionShader = VK_SHADER_UNUSED_KHR;
+        }
+
+        ret->shaderGroups[i] = insert;
     }
     ret->shaderStageCount = descriptor->stageCount;
     ret->shaderStages = RL_CALLOC(descriptor->stageCount, sizeof(VkPipelineShaderStageCreateInfo));
@@ -10242,6 +10365,7 @@ void wgpuRaytracingPassEncoderSetBindGroup    (WGPURaytracingPassEncoder cpe, ui
             .dynamicOffsets = dynamicOffsets
         }
     };
+    RaytracingPassEncoder_PushCommand(cpe, &cmd);
     cpe->bindGroups[groupIndex] = bindGroup;
     EXIT();
 }
