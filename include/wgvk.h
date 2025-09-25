@@ -137,8 +137,6 @@ typedef struct WGPUShaderModuleImpl* WGPUShaderModule;
 typedef struct WGPUComputePipelineImpl* WGPUComputePipeline;
 typedef struct WGPURayTracingAccelerationContainerImpl* WGPURayTracingAccelerationContainer;
 typedef struct WGPURayTracingShaderBindingTableImpl* WGPURayTracingShaderBindingTable;
-//typedef struct WGPUTopLevelAccelerationStructureImpl* WGPUTopLevelAccelerationStructure;
-//typedef struct WGPUBottomLevelAccelerationStructureImpl* WGPUBottomLevelAccelerationStructure;
 typedef struct WGPURaytracingPipelineImpl* WGPURaytracingPipeline;
 typedef struct WGPURaytracingPassEncoderImpl* WGPURaytracingPassEncoder;
 
