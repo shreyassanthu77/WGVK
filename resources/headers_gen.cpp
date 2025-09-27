@@ -8,7 +8,6 @@
 #include <vector>
 #include <algorithm>
 #include <iomanip>
-#include <functional>
 
 using nlohmann::json;
 
