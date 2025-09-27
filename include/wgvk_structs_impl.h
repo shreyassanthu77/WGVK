@@ -1779,12 +1779,12 @@ RGAPI void ce_trackBuffer               (WGPUCommandEncoder encoder, WGPUBuffer 
 RGAPI void ce_trackTexture              (WGPUCommandEncoder encoder, WGPUTexture texture, ImageUsageSnap usage);
 RGAPI void ce_trackTextureView          (WGPUCommandEncoder encoder, WGPUTextureView view, ImageUsageSnap usage);
 
-RGAPI Bool32 ru_containsBuffer          (const ResourceUsage* resourceUsage, WGPUBuffer buffer);
-RGAPI Bool32 ru_containsTexture         (const ResourceUsage* resourceUsage, WGPUTexture texture);
-RGAPI Bool32 ru_containsTextureView     (const ResourceUsage* resourceUsage, WGPUTextureView view);
-RGAPI Bool32 ru_containsBindGroup       (const ResourceUsage* resourceUsage, WGPUBindGroup bindGroup);
-RGAPI Bool32 ru_containsBindGroupLayout (const ResourceUsage* resourceUsage, WGPUBindGroupLayout bindGroupLayout);
-RGAPI Bool32 ru_containsSampler         (const ResourceUsage* resourceUsage, WGPUSampler bindGroup);
+RGAPI WGPUBool32 ru_containsBuffer          (const ResourceUsage* resourceUsage, WGPUBuffer buffer);
+RGAPI WGPUBool32 ru_containsTexture         (const ResourceUsage* resourceUsage, WGPUTexture texture);
+RGAPI WGPUBool32 ru_containsTextureView     (const ResourceUsage* resourceUsage, WGPUTextureView view);
+RGAPI WGPUBool32 ru_containsBindGroup       (const ResourceUsage* resourceUsage, WGPUBindGroup bindGroup);
+RGAPI WGPUBool32 ru_containsBindGroupLayout (const ResourceUsage* resourceUsage, WGPUBindGroupLayout bindGroupLayout);
+RGAPI WGPUBool32 ru_containsSampler         (const ResourceUsage* resourceUsage, WGPUSampler bindGroup);
 
 RGAPI void releaseAllAndClear(ResourceUsage* resourceUsage);
 
@@ -3983,7 +3983,7 @@ static inline VkAccessFlags extractVkAccessFlags(const WGPUBindGroupLayoutEntry*
 #define ENTRY()// (void)0// printf("Entering: %s\n", __func__)
 #define EXIT()// (void)0// printf("Exiting: %s\n", __func__)
 
-
+size_t vkFormatSize(VkFormat format);
 
 
 

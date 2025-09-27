@@ -80,7 +80,7 @@ extern "C"{
 
 typedef uint64_t WGPUFlags;
 typedef uint32_t WGPUBool;
-typedef uint32_t Bool32;
+typedef uint32_t WGPUBool32;
 
 struct WGPUTextureImpl;
 struct WGPUTextureViewImpl;
@@ -1246,7 +1246,7 @@ typedef struct WGPUSamplerDescriptor {
 
 typedef struct WGPUFutureWaitInfo {
     WGPUFuture future;
-    Bool32 completed;
+    WGPUBool32 completed;
 } WGPUFutureWaitInfo;
 
 typedef struct WGPULimits {
@@ -1627,7 +1627,7 @@ typedef struct WGPUPrimitiveState {
     WGPUIndexFormat stripIndexFormat;
     WGPUFrontFace frontFace;
     WGPUCullMode cullMode;
-    Bool32 unclippedDepth;
+    WGPUBool32 unclippedDepth;
 } WGPUPrimitiveState;
 
 typedef enum WGPUStencilOperation {
@@ -1653,7 +1653,7 @@ typedef struct WGPUStencilFaceState {
 typedef struct WGPUDepthStencilState {
     WGPUChainedStruct* nextInChain;
     WGPUTextureFormat format;
-    Bool32 depthWriteEnabled;
+    WGPUBool32 depthWriteEnabled;
     WGPUCompareFunction depthCompare;
     
     WGPUStencilFaceState stencilFront;
@@ -1757,7 +1757,7 @@ typedef struct WGPUMultisampleState {
     WGPUChainedStruct* nextInChain;
     uint32_t count;
     uint32_t mask;
-    Bool32 alphaToCoverageEnabled;
+    WGPUBool32 alphaToCoverageEnabled;
 } WGPUMultisampleState;
 
 typedef struct WGPUComputeState {
