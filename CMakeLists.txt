@@ -302,11 +302,16 @@ install(TARGETS wgvk
 )
 
 # Install headers (excluding vulkan headers)
-install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/
-  DESTINATION include/WGVK
-  FILES_MATCHING PATTERN "*.h"
-  PATTERN "vulkan" EXCLUDE
-  PATTERN "vk_video" EXCLUDE
+install(  
+  FILES
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/wgvk.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/wgvk_config.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/wgvk_structs_impl.h
+  DESTINATION include/
+)
+install(FILES
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/webgpu/webgpu.h
+  DESTINATION include/webgpu
 )
 
 # Create a usage README for releases
