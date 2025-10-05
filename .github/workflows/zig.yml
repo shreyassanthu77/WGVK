@@ -1,0 +1,22 @@
+name: Zig CI
+
+on:
+  push:
+    branches: [ "*" ]
+  pull_request:
+    branches: [ "*" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Zig
+        uses: goto-bus-stop/setup-zig@v2
+        with:
+          version: 0.15.1
+
+      - name: Build with Zig
+        run: zig build
