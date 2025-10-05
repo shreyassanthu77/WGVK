@@ -324,12 +324,14 @@ static void doSurfaceCreation(WGPUInstance instance, WGPUSurface ret, WGPUChaine
                 if (display == VK_NULL_HANDLE) { // This branch is already sus
                     uint32_t displayCount = 0;
                     if (vkGetPhysicalDeviceDisplayPropertiesKHR(phys, &displayCount, NULL) != VK_SUCCESS || displayCount == 0) {
-                        return NULL;
+                        ret->surface = VK_NULL_HANDLE;
+                        return;
                     }
                     wgvk_assert(displayCount <= 64, "More than 64 displays not supported");
                     VkDisplayPropertiesKHR displays[64] = {0};
                     if (vkGetPhysicalDeviceDisplayPropertiesKHR(phys, &displayCount, displays) != VK_SUCCESS) {
-                        return NULL;
+                        ret->surface = VK_NULL_HANDLE;
+                        return;
                     }
                     // if caller provided a nonzero connectorId but EXT isn’t available
                     // we can’t reliably map it therefore pick the first display.
@@ -341,11 +343,13 @@ static void doSurfaceCreation(WGPUInstance instance, WGPUSurface ret, WGPUChaine
                 getDisplayModeResult |= vkGetDisplayModePropertiesKHR(phys, display, &modeCount, modeProps);
                 if (getDisplayModeResult != VK_SUCCESS){
                     fprintf(stderr, "Surface creation failed: vkGetDisplayModePropertiesKHR returned %s", vkErrorString(getDisplayModeResult));
-                    return NULL;
+                    ret->surface = VK_NULL_HANDLE;
+                    return;
                 }
                 else if(modeCount == 0) {
                     fprintf(stderr, "Surface creation failed: vkGetDisplayModePropertiesKHR returned 0 modes");
-                    return NULL;
+                    ret->surface = VK_NULL_HANDLE;
+                    return;
                 }
             
                 uint32_t chosenModeIndex = 0;
