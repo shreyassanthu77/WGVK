@@ -1,22 +1,113 @@
-name: Zig CI
+name: Zig CI (Multiplatform)
 
 on:
   push:
-    branches: [ "*" ]
+    branches: ["*"]
   pull_request:
-    branches: [ "*" ]
+    branches: ["*"]
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            cc: gcc
+            cxx: g++
+            name: Ubuntu (GCC)
+          - os: ubuntu-latest
+            cc: clang
+            cxx: clang++
+            name: Ubuntu (Clang)
+          - os: macos-latest
+            cc: clang
+            name: macOS (Apple Clang)
+          - os: windows-latest
+            cc: msvc
+            name: Windows (MSVC)
+          - os: windows-latest
+            cc: mingw
+            msystem: MINGW64
+            name: Windows (MinGW-w64)
+
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Zig
         uses: goto-bus-stop/setup-zig@v2
         with:
           version: 0.15.1
 
-      - name: Build with Zig
+      # Linux toolchains
+      - name: Install toolchain (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          if [ "${{ matrix.cc }}" = "gcc" ]; then
+            sudo apt-get install -y build-essential
+          else
+            sudo apt-get install -y clang lld
+          fi
+
+      # MSVC environment on Windows
+      - name: Set up MSVC environment (Windows MSVC)
+        if: runner.os == 'Windows' && matrix.cc == 'msvc'
+        uses: ilammy/msvc-dev-cmd@v1
+
+      # MSYS2 MinGW-w64 on Windows
+      - name: Set up MSYS2 MinGW-w64 (Windows MinGW)
+        if: runner.os == 'Windows' && matrix.cc == 'mingw'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: ${{ matrix.msystem }}
+          update: true
+          install: >-
+            mingw-w64-x86_64-toolchain
+
+      - name: Show tool versions
+        shell: bash
+        run: |
+          echo "Zig:"; zig version
+          echo "OS: $RUNNER_OS"
+          case "$RUNNER_OS" in
+            Linux)
+              ${{ matrix.cc }} --version
+              ;;
+            macOS)
+              clang --version
+              ;;
+            Windows)
+              if [ "${{ matrix.cc }}" = "msvc" ]; then
+                cl /Bv || true
+              else
+                where gcc || true
+                gcc --version || true
+              fi
+              ;;
+          esac
+
+      # Build per platform/toolchain
+      - name: Build (Ubuntu)
+        if: runner.os == 'Linux'
+        env:
+          CC: ${{ matrix.cc }}
+          CXX: ${{ matrix.cxx }}
         run: zig build
+
+      - name: Build (macOS)
+        if: runner.os == 'macOS'
+        run: zig build
+
+      - name: Build (Windows MSVC)
+        if: runner.os == 'Windows' && matrix.cc == 'msvc'
+        run: zig build -Dtarget=x86_64-windows-msvc
+
+      - name: Build (Windows MinGW-w64)
+        if: runner.os == 'Windows' && matrix.cc == 'mingw'
+        shell: msys2 {0}
+        run: |
+          zig build -Dtarget=x86_64-windows-gnu
