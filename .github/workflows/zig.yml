@@ -45,9 +45,13 @@ jobs:
         if: runner.os == 'Linux'
         run: zig build -Doptimize=ReleaseFast all --verbose
 
-      - name: Build Examples
+      - name: Build Examples Linux
         if: runner.os == 'Linux'
         run: |
           sudo apt update
-          sudo apt install -y libwayland-dev libx11-dev libxrandr-dev libglfw3-dev
+          sudo apt install -y libwayland-dev libx11-dev libxrandr-dev
           zig build -Doptimize=ReleaseFast examples --verbose
+
+      - name: Build Examples (non-Linux)
+        if: runner.os != 'Linux'
+        run: zig build -Doptimize=ReleaseFast examples --verbose
