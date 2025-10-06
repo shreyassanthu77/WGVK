@@ -161,7 +161,13 @@ fn buildExample(
     });
     example_exe.linkLibrary(wgvk_lib);
 
-    example_exe.linkSystemLibrary("glfw");
+    if (b.lazyDependency("glfw", .{
+        .target = options.target,
+        .optimize = options.optimize,
+    })) |glfw| {
+        example_exe.linkLibrary(glfw.artifact("glfw"));
+    }
+
     switch (options.target.result.os.tag) {
         .windows => {
             example_exe.root_module.addCMacro("SUPPORT_WIN32_SURFACE", "1");

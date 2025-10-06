@@ -20,5 +20,10 @@
             .hash = "N-V-__8AAJfbCQBWPD1WA6AuYSk8LAIj4Bo_KY-2Br8NEIKT",
             .lazy = true,
         },
+        .glfw = .{
+            .url = "git+https://github.com/AshishBhattarai/glfw#87d3a3202a2e21909c38384bf31d368277c5f2a2",
+            .hash = "glfw-0.0.0-lD0VFo6rGQDNct-uNtuvjUU0loQ8aYNWtygNdkRc38fT",
+            .lazy = true,
+        },
     },
 }
