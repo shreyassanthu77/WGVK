@@ -31,8 +31,12 @@ jobs:
           version: 0.15.1
 
       # TODO: Add tests and examples
-      - name: Build Lib
+      - name: Build Lib for ${{ matrix.target }}
         run: zig build -Dtarget=${{ matrix.target }} -Doptimize=ReleaseFast --verbose
+
+      - name: Build Lib for x86_64-windows-msvc
+        if: runner.os == 'Windows'
+        run: zig build -Dtarget=x86_64-windows-msvc -Doptimize=ReleaseFast --verbose
 
       - name: Cross Compile
         if: contains(matrix.target, 'x86_64') && runner.os == 'Linux'
