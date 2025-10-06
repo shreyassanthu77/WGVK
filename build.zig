@@ -7,15 +7,30 @@ pub fn build(b: *std.Build) !void {
     const support_drm = b.option(bool, "drm", "Support Direct Rendering Infrastructure Surfaces (Linux)") orelse false;
     const enable_x11 = b.option(bool, "x11", "Enable X11 support") orelse true;
     const enable_wayland = b.option(bool, "wayland", "Enable Wayland support") orelse true;
-
-    b.installArtifact(try buildLib(b, .{
+    const wgvk_options = WgvkOptions{
         .target = target,
         .optimize = optimize,
         .use_vma = use_vma,
         .support_drm = support_drm,
         .enable_x11 = enable_x11,
         .enable_wayland = enable_wayland,
-    }));
+    };
+
+    const wgvk_lib = try buildLib(b, wgvk_options);
+    b.installArtifact(wgvk_lib);
+
+    const examples_step = b.step("examples", "Build examples");
+    const examples: []const []const u8 = &.{
+        "asynchronous_loading",
+        "basic_compute",
+        "glfw_surface",
+        "multi_submit",
+        "rgfw_surface",
+    };
+    for (examples) |example| {
+        const example_output = try buildExample(b, wgvk_options, wgvk_lib, example);
+        examples_step.dependOn(&example_output.step);
+    }
 
     const build_all_step = b.step("all", "Build all targets");
     const build_targets: []const std.Target.Query = &.{
@@ -49,7 +64,7 @@ pub fn build(b: *std.Build) !void {
     }
 }
 
-const BuildWgvkOptions = struct {
+const WgvkOptions = struct {
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
     use_vma: bool,
@@ -57,7 +72,8 @@ const BuildWgvkOptions = struct {
     enable_x11: bool,
     enable_wayland: bool,
 };
-fn buildLib(b: *std.Build, options: BuildWgvkOptions) !*std.Build.Step.Compile {
+
+fn buildLib(b: *std.Build, options: WgvkOptions) !*std.Build.Step.Compile {
     const wgvk_mod = b.createModule(.{
         .target = options.target,
         .optimize = options.optimize,
@@ -123,4 +139,62 @@ fn buildLib(b: *std.Build, options: BuildWgvkOptions) !*std.Build.Step.Compile {
     wgvk_lib.installHeader(b.path("./include/wgvk_config.h"), "wgvk_config.h");
 
     return wgvk_lib;
+}
+
+fn buildExample(
+    b: *std.Build,
+    options: WgvkOptions,
+    wgvk_lib: *std.Build.Step.Compile,
+    example: []const u8,
+) !*std.Build.Step.InstallArtifact {
+    const example_exe = b.addExecutable(.{
+        .name = example,
+        .root_module = b.createModule(.{
+            .target = options.target,
+            .optimize = options.optimize,
+        }),
+    });
+    example_exe.root_module.addCMacro("_POSIX_C_SOURCE", "200809L");
+    example_exe.addIncludePath(b.path("include"));
+    example_exe.addCSourceFile(.{
+        .file = b.path(b.fmt("examples/{s}.c", .{example})),
+    });
+    example_exe.linkLibrary(wgvk_lib);
+
+    example_exe.linkSystemLibrary("glfw");
+    switch (options.target.result.os.tag) {
+        .windows => {
+            example_exe.root_module.addCMacro("SUPPORT_WIN32_SURFACE", "1");
+        },
+        .macos => {
+            example_exe.root_module.addCMacro("SUPPORT_METAL_SURFACE", "1");
+        },
+        .linux => {
+            const is_android = options.target.result.abi.isAndroid();
+            if (!is_android and options.enable_x11) if (b.lazyDependency("x11_headers", .{})) |x11| {
+                example_exe.root_module.addCMacro("SUPPORT_XLIB_SURFACE", "1");
+                example_exe.addIncludePath(x11.path("include"));
+                example_exe.linkSystemLibrary("X11");
+                example_exe.linkSystemLibrary("Xrandr");
+            };
+            if (!is_android and options.enable_wayland) if (b.lazyDependency("wayland_headers", .{})) |wayland| {
+                example_exe.root_module.addCMacro("SUPPORT_WAYLAND_SURFACE", "1");
+                example_exe.addIncludePath(wayland.path("wayland"));
+                example_exe.linkSystemLibrary("wayland-client");
+            };
+        },
+        else => {
+            return error.UnsupportedPlatform;
+        },
+    }
+
+    const example_output = b.addInstallArtifact(example_exe, .{
+        .dest_dir = .{
+            .override = .{
+                .custom = "examples",
+            },
+        },
+    });
+
+    return example_output;
 }

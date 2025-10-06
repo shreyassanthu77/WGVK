@@ -44,3 +44,10 @@ jobs:
       - name: Cross Compile
         if: runner.os == 'Linux'
         run: zig build -Doptimize=ReleaseFast all --verbose
+
+      - name: Build Examples
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt update
+          sudo apt install -y libwayland-dev libx11-dev libxrandr-dev libxi-dev libglfw3 libglfw3-dev
+          zig build -Doptimize=ReleaseFast examples --verbose
