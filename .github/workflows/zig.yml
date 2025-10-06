@@ -32,8 +32,8 @@ jobs:
 
       # TODO: Add tests and examples
       - name: Build Lib
-        run: zig build -Dtarget=${{ matrix.target }} -Doptimize=ReleaseFast
+        run: zig build -Dtarget=${{ matrix.target }} -Doptimize=ReleaseFast --verbose
 
       - name: Cross Compile
         if: contains(matrix.target, 'x86_64') && runner.os == 'Linux'
-        run: zig build -Doptimize=ReleaseFast all
+        run: zig build -Doptimize=ReleaseFast all --verbose
