@@ -34,9 +34,9 @@ jobs:
       - name: Build Lib for ${{ matrix.target }}
         run: zig build -Dtarget=${{ matrix.target }} -Doptimize=ReleaseFast --verbose
 
-      - name: Build Lib for x86_64-windows-msvc
+      - name: Build Lib for ${{ runner.arch }}-windows-msvc
         if: runner.os == 'Windows'
-        run: zig build -Dtarget=x86_64-windows-msvc -Doptimize=ReleaseFast --verbose
+        run: zig build -Dtarget=${{ runner.arch }}-windows-msvc -Doptimize=ReleaseFast --verbose
 
       - name: Cross Compile
         if: contains(matrix.target, 'x86_64') && runner.os == 'Linux'
