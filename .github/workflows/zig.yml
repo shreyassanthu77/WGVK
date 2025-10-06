@@ -49,5 +49,5 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt update
-          sudo apt install -y libwayland-dev libx11-dev libxrandr-dev libxi-dev libglfw3 libglfw3-dev
+          sudo apt install -y libwayland-dev libx11-dev libxrandr-dev libglfw3-dev
           zig build -Doptimize=ReleaseFast examples --verbose

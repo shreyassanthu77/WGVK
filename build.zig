@@ -173,7 +173,7 @@ fn buildExample(
             const is_android = options.target.result.abi.isAndroid();
             if (!is_android and options.enable_x11) if (b.lazyDependency("x11_headers", .{})) |x11| {
                 example_exe.root_module.addCMacro("SUPPORT_XLIB_SURFACE", "1");
-                example_exe.addIncludePath(x11.path("include"));
+                example_exe.addSystemIncludePath(x11.path("include"));
                 example_exe.linkSystemLibrary("X11");
                 example_exe.linkSystemLibrary("Xrandr");
             };
