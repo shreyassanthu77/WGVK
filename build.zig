@@ -27,8 +27,8 @@ pub fn build(b: *std.Build) !void {
         "multi_submit",
         "rgfw_surface",
     };
-    for (examples) |example| {
-        const example_output = try buildExample(b, wgvk_options, wgvk_lib, example);
+    for (examples) |src| {
+        const example_output = try buildExample(b, wgvk_options, wgvk_lib, src);
         examples_step.dependOn(&example_output.step);
     }
 
@@ -156,8 +156,18 @@ fn buildExample(
     });
     example_exe.root_module.addCMacro("_POSIX_C_SOURCE", "200809L");
     example_exe.addIncludePath(b.path("include"));
+    const file_path = b.path(b.fmt("examples/{s}.c", .{example}));
+    const language: std.Build.Module.CSourceLanguage = switch (options.target.result.os.tag) {
+        .macos => if (std.mem.eql(u8, example, "rgfw_surface")) .c else .objective_c,
+        else => .c,
+    };
+
+    if (options.target.result.os.tag == .macos) {
+        example_exe.root_module.addCMacro("_DARWIN_C_SOURCE", "1");
+    }
     example_exe.addCSourceFile(.{
-        .file = b.path(b.fmt("examples/{s}.c", .{example})),
+        .file = file_path,
+        .language = language,
     });
     example_exe.linkLibrary(wgvk_lib);
 
@@ -173,7 +183,18 @@ fn buildExample(
             example_exe.root_module.addCMacro("SUPPORT_WIN32_SURFACE", "1");
         },
         .macos => {
+            if (b.lazyDependency("xcode_frameworks", .{})) |frameworks| {
+                example_exe.addSystemFrameworkPath(frameworks.path("Frameworks"));
+                example_exe.addSystemIncludePath(frameworks.path("include"));
+                example_exe.addLibraryPath(frameworks.path("lib"));
+            }
             example_exe.root_module.addCMacro("SUPPORT_METAL_SURFACE", "1");
+            example_exe.linkFramework("Metal");
+            example_exe.linkFramework("QuartzCore");
+            example_exe.linkFramework("CoreVideo");
+            example_exe.linkFramework("Cocoa");
+            example_exe.linkFramework("OpenGL");
+            example_exe.linkFramework("IOKit");
         },
         .linux => {
             const is_android = options.target.result.abi.isAndroid();
