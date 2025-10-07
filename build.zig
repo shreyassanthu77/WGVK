@@ -19,16 +19,57 @@ pub fn build(b: *std.Build) !void {
     const wgvk_lib = try buildLib(b, wgvk_options);
     b.installArtifact(wgvk_lib);
 
+    const wgvk_translate_c = b.addTranslateC(.{
+        .root_source_file = b.path("include/wgvk.h"),
+        .target = target,
+        .optimize = optimize,
+    });
+    const wgvk_c = wgvk_translate_c.addModule("wgvk-c");
+    wgvk_c.addIncludePath(b.path("include"));
+    wgvk_c.linkLibrary(wgvk_lib);
+
     const examples_step = b.step("examples", "Build examples");
-    const examples: []const []const u8 = &.{
+    const c_examples: []const []const u8 = &.{
         "asynchronous_loading",
         "basic_compute",
         "glfw_surface",
         "multi_submit",
         "rgfw_surface",
     };
-    for (examples) |src| {
-        const example_output = try buildExample(b, wgvk_options, wgvk_lib, src);
+    for (c_examples) |src| {
+        const example_output = try buildCExample(b, wgvk_options, wgvk_lib, src);
+        examples_step.dependOn(&example_output.step);
+    }
+    const zig_examples: []const []const u8 = &.{
+        "zig_glfw",
+    };
+    for (zig_examples) |src| {
+        const example_exe = b.addExecutable(.{
+            .name = src,
+            .root_module = b.createModule(.{
+                .root_source_file = b.path(b.fmt("examples/{s}.zig", .{src})),
+                .imports = &.{
+                    .{ .name = "wgvk_c", .module = wgvk_c },
+                },
+                .target = target,
+                .optimize = optimize,
+            }),
+        });
+        example_exe.linkLibrary(wgvk_lib);
+        if (b.lazyDependency("glfw", .{
+            .target = target,
+            .optimize = optimize,
+        })) |glfw| {
+            example_exe.linkLibrary(glfw.artifact("glfw"));
+        }
+
+        const example_output = b.addInstallArtifact(example_exe, .{
+            .dest_dir = .{
+                .override = .{
+                    .custom = "examples",
+                },
+            },
+        });
         examples_step.dependOn(&example_output.step);
     }
 
@@ -141,7 +182,7 @@ fn buildLib(b: *std.Build, options: WgvkOptions) !*std.Build.Step.Compile {
     return wgvk_lib;
 }
 
-fn buildExample(
+fn buildCExample(
     b: *std.Build,
     options: WgvkOptions,
     wgvk_lib: *std.Build.Step.Compile,
