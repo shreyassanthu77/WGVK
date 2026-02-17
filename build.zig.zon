@@ -21,8 +21,8 @@
             .lazy = true,
         },
         .glfw = .{
-            .url = "git+https://github.com/AshishBhattarai/glfw#87d3a3202a2e21909c38384bf31d368277c5f2a2",
-            .hash = "glfw-0.0.0-lD0VFo6rGQDNct-uNtuvjUU0loQ8aYNWtygNdkRc38fT",
+            .url = "git+https://github.com/allyourcodebase/glfw#79e7ba3d082765954b59c4f11a2f9b4ff1ecb350",
+            .hash = "glfw-0.0.0-R5AeUo0JGgBvENV2Oz-u0V_unpWhEJTfK4qckBH5da6e",
             .lazy = true,
         },
     },

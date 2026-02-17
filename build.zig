@@ -155,7 +155,7 @@ fn buildExample(
         }),
     });
     example_exe.root_module.addCMacro("_POSIX_C_SOURCE", "200809L");
-    example_exe.addIncludePath(b.path("include"));
+    example_exe.root_module.addIncludePath(b.path("include"));
     const file_path = b.path(b.fmt("examples/{s}.c", .{example}));
     const language: std.Build.Module.CSourceLanguage = switch (options.target.result.os.tag) {
         .macos => if (std.mem.eql(u8, example, "rgfw_surface")) .c else .objective_c,
@@ -165,17 +165,19 @@ fn buildExample(
     if (options.target.result.os.tag == .macos) {
         example_exe.root_module.addCMacro("_DARWIN_C_SOURCE", "1");
     }
-    example_exe.addCSourceFile(.{
+    example_exe.root_module.addCSourceFile(.{
         .file = file_path,
         .language = language,
     });
-    example_exe.linkLibrary(wgvk_lib);
+    example_exe.root_module.linkLibrary(wgvk_lib);
 
     if (b.lazyDependency("glfw", .{
         .target = options.target,
         .optimize = options.optimize,
+        .x11 = options.enable_x11,
+        .wayland = options.enable_wayland,
     })) |glfw| {
-        example_exe.linkLibrary(glfw.artifact("glfw"));
+        example_exe.root_module.linkLibrary(glfw.artifact("glfw"));
     }
 
     switch (options.target.result.os.tag) {
@@ -184,30 +186,30 @@ fn buildExample(
         },
         .macos => {
             if (b.lazyDependency("xcode_frameworks", .{})) |frameworks| {
-                example_exe.addSystemFrameworkPath(frameworks.path("Frameworks"));
-                example_exe.addSystemIncludePath(frameworks.path("include"));
-                example_exe.addLibraryPath(frameworks.path("lib"));
+                example_exe.root_module.addSystemFrameworkPath(frameworks.path("Frameworks"));
+                example_exe.root_module.addSystemIncludePath(frameworks.path("include"));
+                example_exe.root_module.addLibraryPath(frameworks.path("lib"));
             }
             example_exe.root_module.addCMacro("SUPPORT_METAL_SURFACE", "1");
-            example_exe.linkFramework("Metal");
-            example_exe.linkFramework("QuartzCore");
-            example_exe.linkFramework("CoreVideo");
-            example_exe.linkFramework("Cocoa");
-            example_exe.linkFramework("OpenGL");
-            example_exe.linkFramework("IOKit");
+            example_exe.root_module.linkFramework("Metal", .{});
+            example_exe.root_module.linkFramework("QuartzCore", .{});
+            example_exe.root_module.linkFramework("CoreVideo", .{});
+            example_exe.root_module.linkFramework("Cocoa", .{});
+            example_exe.root_module.linkFramework("OpenGL", .{});
+            example_exe.root_module.linkFramework("IOKit", .{});
         },
         .linux => {
             const is_android = options.target.result.abi.isAndroid();
             if (!is_android and options.enable_x11) if (b.lazyDependency("x11_headers", .{})) |x11| {
                 example_exe.root_module.addCMacro("SUPPORT_XLIB_SURFACE", "1");
-                example_exe.linkLibrary(x11.artifact("x11-headers"));
-                example_exe.linkSystemLibrary("X11");
-                example_exe.linkSystemLibrary("Xrandr");
+                example_exe.root_module.linkLibrary(x11.artifact("x11-headers"));
+                example_exe.root_module.linkSystemLibrary("X11", .{});
+                example_exe.root_module.linkSystemLibrary("Xrandr", .{});
             };
             if (!is_android and options.enable_wayland) if (b.lazyDependency("wayland_headers", .{})) |wayland| {
                 example_exe.root_module.addCMacro("SUPPORT_WAYLAND_SURFACE", "1");
-                example_exe.addIncludePath(wayland.path("wayland"));
-                example_exe.linkSystemLibrary("wayland-client");
+                example_exe.root_module.addIncludePath(wayland.path("wayland"));
+                example_exe.root_module.linkSystemLibrary("wayland-client", .{});
             };
         },
         else => {
