@@ -332,11 +332,19 @@ int main(void) {
     // -------------------------------------------------------------------------
     // Ray tracing pipeline
     // -------------------------------------------------------------------------
+    WGPUBindGroupLayoutEntryRayTracing rtBglEntry = {
+        .chain = {
+            .next = NULL,
+            .sType = WGPUSType_BindGroupLayoutEntryRayTracing,
+        },
+        .accelerationStructure = 1
+    };
+
     WGPUBindGroupLayoutEntry bglEntries[3] = {
         {
+            .nextInChain = (WGPUChainedStruct*)&rtBglEntry,
             .binding = 0,
             .visibility = WGPUShaderStage_RayGen | WGPUShaderStage_ClosestHit | WGPUShaderStage_Miss,
-            .accelerationStructure = 1
         },
         {
             .binding = 1,
@@ -435,10 +443,18 @@ int main(void) {
 
     wgpuQueueWriteBuffer(queue, cameraBuffer, 0, cameraData, sizeof(cameraData));
 
+    WGPUBindGroupEntryRayTracing rtBgEntry = {
+        .chain = {
+            .next = NULL,
+            .sType = WGPUSType_BindGroupEntryRayTracing,
+        },
+        .accelerationStructure = tlas
+    };
+
     WGPUBindGroupEntry bgEntries[3] = {
         {
+            .nextInChain = (WGPUChainedStruct*)&rtBgEntry,
             .binding = 0,
-            .accelerationStructure = tlas
         },
         {
             .binding = 1,
