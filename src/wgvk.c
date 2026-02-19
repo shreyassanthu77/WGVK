@@ -9825,7 +9825,7 @@ static VkResult wgvkDeviceMemoryPool_create_chunk(WgvkDeviceMemoryPool* pool, si
 
     VkMemoryAllocateFlagsInfo flagsInfo = {
         .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO,
-        //.flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT
+        .flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT
     };
 
     VkMemoryAllocateInfo allocInfo = {
