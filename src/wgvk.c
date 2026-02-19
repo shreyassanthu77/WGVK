@@ -744,6 +744,7 @@ WGPUStatus wgpuAdapterGetLimits(WGPUAdapter adapter, WGPULimits* limits) WGPU_FU
     limits->maxComputeWorkgroupSizeY = deviceProperties2->properties.limits.maxComputeWorkGroupSize[1];
     limits->maxComputeWorkgroupSizeZ = deviceProperties2->properties.limits.maxComputeWorkGroupSize[2];
     limits->maxComputeWorkgroupsPerDimension = MIN(deviceProperties2->properties.limits.maxComputeWorkGroupCount[0], MIN(deviceProperties2->properties.limits.maxComputeWorkGroupCount[1], deviceProperties2->properties.limits.maxComputeWorkGroupCount[2]));
+    limits->maxImmediateSize = deviceProperties2->properties.limits.maxPushConstantsSize;
     
     WGPUChainedStruct* chain = limits->nextInChain;
     while (chain) {
@@ -2860,7 +2861,7 @@ WGPUFuture wgpuBufferMapAsync(WGPUBuffer buffer, WGPUMapMode mode, size_t offset
     EXIT();
 }
 
-size_t wgpuBufferGetSize(WGPUBuffer buffer){
+uint64_t wgpuBufferGetSize(WGPUBuffer buffer){
     ENTRY();
     switch(buffer->allocationType){
         case AllocationTypeBuiltin:{
@@ -3324,10 +3325,24 @@ void wgpuWriteBindGroup(WGPUDevice device, WGPUBindGroup wvBindGroup, const WGPU
                 writes.    data[i].pImageInfo = imageInfos.data + i;
             }break;
             case VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR:{
-                ru_trackAccelerationStructure(&wvBindGroup->resourceUsage, bgdesc->entries[i].accelerationStructure);
+                const WGPUChainedStruct* chain = bgdesc->entries[i].nextInChain;
+                WGPUBindGroupEntryRayTracing* rtEntry = NULL;
+                while(chain != NULL) {
+                    if(chain->sType == WGPUSType_BindGroupEntryRayTracing) {
+                        rtEntry = (WGPUBindGroupEntryRayTracing*)chain;
+                        break;
+                    }
+                    chain = chain->next;
+                }
+                wgvk_assert(rtEntry != NULL, "Acceleration structure binding but no WGPUBindGroupEntryRayTracing in chain");
+                if (rtEntry == NULL) {
+                    DeviceCallback(device, WGPUErrorType_Validation, STRVIEW("Acceleration structure binding but no WGPUBindGroupEntryRayTracing in chain"));
+                    continue; // Or return, depending on control flow
+                }
+                ru_trackAccelerationStructure(&wvBindGroup->resourceUsage, rtEntry->accelerationStructure);
                 accelStructInfos.data[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR;
                 accelStructInfos.data[i].accelerationStructureCount = 1;
-                accelStructInfos.data[i].pAccelerationStructures = &(bgdesc->entries[i].accelerationStructure->accelerationStructure);
+                accelStructInfos.data[i].pAccelerationStructures = &(rtEntry->accelerationStructure->accelerationStructure);
                 writes.          data[i].pNext = accelStructInfos.data + i;
             }break;
             default:
@@ -5633,11 +5648,11 @@ static inline VkColorSpaceKHR toVulkanColorSpace(WGPUPredefinedColorSpace wcsp, 
     return VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
 }
 
-void wgpuSurfaceGetCapabilities(WGPUSurface wgpuSurface, WGPUAdapter adapter, WGPUSurfaceCapabilities* capabilities){
+WGPUStatus wgpuSurfaceGetCapabilities(WGPUSurface wgpuSurface, WGPUAdapter adapter, WGPUSurfaceCapabilities* capabilities){
     ENTRY();
     if(wgpuSurface->capabilityCache.formatCount){
         *capabilities = wgpuSurface->capabilityCache;
-        return;
+        return WGPUStatus_Success;
     }
 
     VkSurfaceKHR surface = wgpuSurface->surface;
@@ -5722,6 +5737,7 @@ void wgpuSurfaceGetCapabilities(WGPUSurface wgpuSurface, WGPUAdapter adapter, WG
     wgpuSurface->capabilityCache.alphaModes = alphaModes;
     *capabilities = wgpuSurface->capabilityCache;
     EXIT();
+    return WGPUStatus_Success;
 }
 
 
@@ -6401,20 +6417,7 @@ WGPURenderPipeline wgpuDeviceCreateRenderPipeline(WGPUDevice device, const WGPUR
     rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
     rasterizer.depthClampEnable = VK_TRUE; // Usually false unless specific features needed
     rasterizer.rasterizerDiscardEnable = VK_FALSE;
-    // Map polygon mode from descriptor
-    switch(descriptor->primitive.polygonMode) {
-        case WGPUPolygonMode_Line:
-            rasterizer.polygonMode = VK_POLYGON_MODE_LINE;
-            break;
-        case WGPUPolygonMode_Point:
-            rasterizer.polygonMode = VK_POLYGON_MODE_POINT;
-            break;
-        case WGPUPolygonMode_Fill:
-        case WGPUPolygonMode_Undefined:
-        default:
-            rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
-            break;
-    }
+    rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
     if(descriptor->primitive.nextInChain && descriptor->primitive.nextInChain->sType == WGPUSType_PrimitiveLineWidthInfo){
         rasterizer.lineWidth = (float)((WGPUPrimitiveLineWidthInfo*)descriptor->primitive.nextInChain)->lineWidth;
     }
@@ -7262,7 +7265,7 @@ void wgpuSurfaceGetCurrentTexture(WGPUSurface surface, WGPUSurfaceTexture* surfa
     EXIT();
 }
 
-void wgpuSurfacePresent(WGPUSurface surface){
+WGPUStatus wgpuSurfacePresent(WGPUSurface surface){
     ENTRY();
     WGPUDevice device = surface->device;
     uint32_t cacheIndex = surface->device->submittedFrames % framesInFlight;
@@ -7360,6 +7363,7 @@ void wgpuSurfacePresent(WGPUSurface surface){
     }
     wgpuDeviceTick(surface->device);
     EXIT();
+    return WGPUStatus_Success;
 }
 void wgpuDeviceTick(WGPUDevice device){
     ENTRY();
@@ -7515,7 +7519,7 @@ WGPUSampler wgpuDeviceCreateSampler(WGPUDevice device, const WGPUSamplerDescript
     EXIT();
     return ret;
 }
-void wgpuRenderPassEncoderSetVertexBuffer(WGPURenderPassEncoder rpe, uint32_t binding, WGPUBuffer buffer, size_t offset, uint64_t size) {
+void wgpuRenderPassEncoderSetVertexBuffer(WGPURenderPassEncoder rpe, uint32_t binding, WGPUBuffer buffer, uint64_t offset, uint64_t size) {
     ENTRY();
     wgvk_assert(rpe != NULL, "RenderPassEncoderHandle is null");
     wgvk_assert(buffer != NULL, "BufferHandle is null");
@@ -9229,10 +9233,13 @@ void wgpuDeviceSetLabel(WGPUDevice device, WGPUStringView label) {
 }
 
 // Stubs for missing Methods of Instance
-WGPUStatus wgpuInstanceGetWGSLLanguageFeatures(WGPUInstance instance, WGPUSupportedWGSLLanguageFeatures * features) {
+void wgpuInstanceGetWGSLLanguageFeatures(WGPUInstance instance, WGPUSupportedWGSLLanguageFeatures * features) {
     ENTRY();
+    if (features) {
+        features->featureCount = 0;
+        features->features = NULL;
+    }
     EXIT();
-    return WGPUStatus_Error;
 }
 WGPUBool wgpuInstanceHasWGSLLanguageFeature(WGPUInstance instance, WGPUWGSLLanguageFeatureName feature) {
     ENTRY();

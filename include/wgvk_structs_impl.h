@@ -3999,6 +3999,17 @@ static inline VkBlendOp toVulkanBlendOperation(WGPUBlendOperation bo) {
 //    return WGPUTextureFormat_Undefined;
 //}
 
+static inline WGPUBool hasAccelerationStructure(const WGPUBindGroupLayoutEntry* entry) {
+    const WGPUChainedStruct* chain = entry->nextInChain;
+    while(chain != NULL) {
+        if(chain->sType == WGPUSType_BindGroupLayoutEntryRayTracing) {
+            return ((const WGPUBindGroupLayoutEntryRayTracing*)chain)->accelerationStructure;
+        }
+        chain = chain->next;
+    }
+    return 0;
+}
+
 static inline VkDescriptorType extractVkDescriptorType(const WGPUBindGroupLayoutEntry* entry){
     if(entry->buffer.type == WGPUBufferBindingType_Storage){
         return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
@@ -4018,7 +4029,7 @@ static inline VkDescriptorType extractVkDescriptorType(const WGPUBindGroupLayout
     if(entry->sampler.type != WGPUSamplerBindingType_BindingNotUsed){
         return VK_DESCRIPTOR_TYPE_SAMPLER;
     }
-    if(entry->accelerationStructure){
+    if(hasAccelerationStructure(entry)){
         return VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
     }
     rg_trap();
@@ -4043,6 +4054,9 @@ static inline VkAccessFlags extractVkAccessFlags(const WGPUBindGroupLayoutEntry*
     }
     if(entry->sampler.type != WGPUSamplerBindingType_BindingNotUsed){
         return 0;
+    }
+    if(hasAccelerationStructure(entry)){
+        return VK_ACCESS_SHADER_READ_BIT;
     }
     rg_trap();
     return 0;
