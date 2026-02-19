@@ -3999,15 +3999,15 @@ static inline VkBlendOp toVulkanBlendOperation(WGPUBlendOperation bo) {
 //    return WGPUTextureFormat_Undefined;
 //}
 
-static inline WGPUBool hasAccelerationStructure(const WGPUBindGroupLayoutEntry* entry) {
+static inline bool hasAccelerationStructure(const WGPUBindGroupLayoutEntry* entry) {
     const WGPUChainedStruct* chain = entry->nextInChain;
     while(chain != NULL) {
         if(chain->sType == WGPUSType_BindGroupLayoutEntryRayTracing) {
-            return ((const WGPUBindGroupLayoutEntryRayTracing*)chain)->accelerationStructure;
+            return ((const WGPUBindGroupLayoutEntryRayTracing*)chain)->accelerationStructure != 0;
         }
         chain = chain->next;
     }
-    return 0;
+    return false;
 }
 
 static inline VkDescriptorType extractVkDescriptorType(const WGPUBindGroupLayoutEntry* entry){
