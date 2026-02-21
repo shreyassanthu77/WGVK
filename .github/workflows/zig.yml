@@ -52,6 +52,13 @@ jobs:
           sudo apt install -y libwayland-dev libx11-dev libxrandr-dev
           zig build -Doptimize=ReleaseFast examples --verbose
 
+      - name: Build iOS Targets
+        if: runner.os == 'macOS'
+        run: |
+          zig build -Dtarget=aarch64-ios -Doptimize=ReleaseFast --verbose
+          zig build -Dtarget=aarch64-ios-simulator -Doptimize=ReleaseFast --verbose
+          zig build -Dtarget=x86_64-ios-simulator -Doptimize=ReleaseFast --verbose
+
       - name: Build Examples (non-Linux)
         if: runner.os != 'Linux'
         run: zig build -Doptimize=ReleaseFast examples --verbose

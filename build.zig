@@ -28,11 +28,16 @@ pub fn build(b: *std.Build) !void {
         "rgfw_surface",
     };
     for (examples) |src| {
-        const example_output = try buildExample(b, wgvk_options, wgvk_lib, src);
+        const example_output = buildExample(b, wgvk_options, wgvk_lib, src) catch continue;
         examples_step.dependOn(&example_output.step);
     }
 
     const build_all_step = b.step("all", "Build all targets");
+
+    const ios_min_version: std.Target.Query.OsVersion = .{
+        .semver = .{ .major = 13, .minor = 0, .patch = 0 },
+    };
+
     const build_targets: []const std.Target.Query = &.{
         .{ .cpu_arch = .aarch64, .os_tag = .windows },
         .{ .cpu_arch = .aarch64, .os_tag = .macos },
@@ -42,6 +47,9 @@ pub fn build(b: *std.Build) !void {
         .{ .cpu_arch = .x86_64, .os_tag = .macos },
         .{ .cpu_arch = .x86_64, .os_tag = .linux, .abi = .gnu },
         .{ .cpu_arch = .x86_64, .os_tag = .linux, .abi = .musl },
+        .{ .cpu_arch = .aarch64, .os_tag = .ios, .os_version_min = ios_min_version },
+        .{ .cpu_arch = .aarch64, .os_tag = .ios, .abi = .simulator, .os_version_min = ios_min_version },
+        .{ .cpu_arch = .x86_64, .os_tag = .ios, .abi = .simulator, .os_version_min = ios_min_version },
     };
     for (build_targets) |t| {
         const resolved_target = b.resolveTargetQuery(t);
@@ -103,7 +111,7 @@ fn buildLib(b: *std.Build, options: WgvkOptions) !*std.Build.Step.Compile {
         .windows => {
             wgvk_mod.addCMacro("SUPPORT_WIN32_SURFACE", "1");
         },
-        .macos => {
+        .macos, .ios => {
             if (b.lazyDependency("xcode_frameworks", .{})) |frameworks| {
                 wgvk_mod.addSystemFrameworkPath(frameworks.path("Frameworks"));
                 wgvk_mod.addSystemIncludePath(frameworks.path("include"));
@@ -211,6 +219,9 @@ fn buildExample(
                 example_exe.root_module.addIncludePath(wayland.path("wayland"));
                 example_exe.root_module.linkSystemLibrary("wayland-client", .{});
             };
+        },
+        .ios => {
+            return error.UnsupportedPlatform;
         },
         else => {
             return error.UnsupportedPlatform;
