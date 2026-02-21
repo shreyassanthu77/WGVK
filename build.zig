@@ -17,7 +17,7 @@ pub fn build(b: *std.Build) !void {
         .enable_wayland = enable_wayland,
     };
 
-    const wgvk_lib = try buildLib(b, wgvk_options);
+    const wgvk_lib = (try buildLib(b, wgvk_options)) orelse return error.AndroidSdkNotFound;
     b.installArtifact(wgvk_lib);
 
     const examples_step = b.step("examples", "Build examples");
@@ -48,14 +48,14 @@ pub fn build(b: *std.Build) !void {
     };
     for (build_targets) |t| {
         const resolved_target = b.resolveTargetQuery(t);
-        const lib = try buildLib(b, .{
+        const lib = (try buildLib(b, .{
             .target = resolved_target,
             .optimize = optimize,
             .use_vma = use_vma,
             .support_drm = support_drm,
             .enable_x11 = enable_x11,
             .enable_wayland = enable_wayland,
-        });
+        })) orelse continue;
         const target_output = b.addInstallArtifact(lib, .{
             .dest_dir = .{
                 .override = .{
@@ -76,7 +76,7 @@ const WgvkOptions = struct {
     enable_wayland: bool,
 };
 
-fn buildLib(b: *std.Build, options: WgvkOptions) !*std.Build.Step.Compile {
+fn buildLib(b: *std.Build, options: WgvkOptions) !?*std.Build.Step.Compile {
     const wgvk_mod = b.createModule(.{
         .target = options.target,
         .optimize = options.optimize,
@@ -145,7 +145,10 @@ fn buildLib(b: *std.Build, options: WgvkOptions) !*std.Build.Step.Compile {
                 .root_module = wgvk_mod,
             })
         else blk: {
-            var android = try AndroidSdk.init(b, options.target, 29); // 29 = android 10 (Google play minimum target)
+            var android = AndroidSdk.init(b, options.target, 29) catch |err| { // 29 = android 10 (Google play minimum target)
+                std.log.warn("Android SDK not found, skipping android target: {}", .{err});
+                return null;
+            };
             break :blk android.addLibrary(.{
                 .name = "wgvk",
                 .root_module = wgvk_mod,
