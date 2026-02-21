@@ -25,5 +25,9 @@
             .hash = "glfw-0.0.0-R5AeUo0JGgBvENV2Oz-u0V_unpWhEJTfK4qckBH5da6e",
             .lazy = true,
         },
+        .zig_android = .{
+            .url = "git+https://github.com/shreyassanthu77/zig-android.git#b137a1ca06806b64fa964503d9ba5453ce4ec64b",
+            .hash = "zig_android-0.0.2-Hyn4Y800AAAyNkApPNWP36rD6RnZw6vQYawdW7Az1sxQ",
+        },
     },
 }
