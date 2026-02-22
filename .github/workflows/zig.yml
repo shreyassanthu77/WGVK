@@ -42,11 +42,11 @@ jobs:
         if: runner.os == 'Windows'
         run: zig build -Dtarget=x86_64-windows-msvc -Doptimize=ReleaseFast --verbose --prefix ./zig-out/x86_64-windows
 
-      - name: Set up Android SDK/NDK
-        if: runner.os == 'Linux'
-        uses: android-actions/setup-android@v3
-        with:
-          packages: "ndk;27.3.13750724"
+      # - name: Set up Android SDK/NDK
+      #   if: runner.os == 'Linux'
+      #   uses: android-actions/setup-android@v3
+      #   with:
+      #     packages: "ndk;27.3.13750724"
 
       - name: Cross Compile
         if: runner.os == 'Linux'
