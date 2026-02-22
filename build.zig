@@ -148,7 +148,7 @@ fn buildLib(b: *std.Build, options: WgvkOptions) !*std.Build.Step.Compile {
                 .root_module = wgvk_mod,
             })
         else blk: {
-            var android = try AndroidSdk.init(b, options.target, 29);
+            var android = AndroidSdk.init(b, 29);
             break :blk android.addLibrary(.{
                 .name = "wgvk",
                 .root_module = wgvk_mod,
