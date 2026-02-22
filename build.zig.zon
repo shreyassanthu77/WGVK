@@ -26,8 +26,8 @@
             .lazy = true,
         },
         .zig_android = .{
-            .url = "git+https://github.com/shreyassanthu77/zig-android.git#14cc60e8e3bef53d3ba3f243d3ee3ecda7b25369",
-            .hash = "zig_android-0.0.41-Hyn4Y2Q7AQC2HoXmywKQIo8zeeOFaGfN3L7_HSCkJ1IM",
+            .url = "git+https://github.com/shreyassanthu77/zig-android.git#5497cc4789ee9baed84b707fb8b97471cc94aa06",
+            .hash = "zig_android-0.0.42-Hyn4Y9lHAQAkRcf9tz82XgsPz4k5FgPqStL2M1KZGOZl",
         },
     },
 }
