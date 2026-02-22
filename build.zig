@@ -68,6 +68,67 @@ pub fn build(b: *std.Build) !void {
         });
         build_all_step.dependOn(&target_output.step);
     }
+
+    // Android APK example
+    const android_step = b.step("android-example", "Build Android example APK");
+    var sdk = AndroidSdk.init(b, 28);
+    const app = try sdk.createApp(.{
+        .manifest = .{
+            .package = "com.wgvk.example",
+            .uses_sdk = .{
+                .android_minSdkVersion = 29,
+                .android_targetSdkVersion = 35,
+            },
+            .application = .{
+                .android_label = "WGVK Clear",
+                .android_hasCode = false,
+                .activity = &.{.{
+                    .android_name = "android.app.NativeActivity",
+                    .android_exported = true,
+                    .android_configChanges = &.{ .orientation, .keyboardHidden, .screenSize },
+                    .meta_data = &.{.{
+                        .android_name = "android.app.lib_name",
+                        .android_value = "wgvk_android_clear",
+                    }},
+                    .intent_filter = &.{AndroidSdk.Application.Manifest.IntentFilter.main_launcher},
+                }},
+            },
+        },
+    });
+
+    const android_targets: []const std.Target.Query = &.{
+        .{ .cpu_arch = .aarch64, .os_tag = .linux, .abi = .android },
+        .{ .cpu_arch = .x86_64, .os_tag = .linux, .abi = .android },
+    };
+    for (android_targets) |t| {
+        const resolved = b.resolveTargetQuery(t);
+        const wgvk_android = buildLib(b, .{
+            .target = resolved,
+            .optimize = optimize,
+            .use_vma = use_vma,
+            .support_drm = false,
+            .enable_x11 = false,
+            .enable_wayland = false,
+        }) catch continue;
+
+        const lib = app.addLibrary(.{
+            .name = "wgvk_android_clear",
+            .root_module = b.createModule(.{
+                .target = resolved,
+                .optimize = optimize,
+                .link_libc = true,
+            }),
+        });
+        lib.root_module.addIncludePath(b.path("include"));
+        lib.root_module.addCSourceFile(.{
+            .file = b.path("examples/android_clear.c"),
+            .flags = &.{"-std=c11"},
+        });
+        lib.root_module.linkLibrary(wgvk_android);
+    }
+
+    const apk = app.addInstallApk(".");
+    android_step.dependOn(&apk.step);
 }
 
 const WgvkOptions = struct {
@@ -148,7 +209,7 @@ fn buildLib(b: *std.Build, options: WgvkOptions) !*std.Build.Step.Compile {
                 .root_module = wgvk_mod,
             })
         else blk: {
-            var android = AndroidSdk.init(b, 29);
+            var android = AndroidSdk.init(b, 28);
             break :blk android.addLibrary(.{
                 .name = "wgvk",
                 .root_module = wgvk_mod,
