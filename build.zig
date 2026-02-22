@@ -71,7 +71,7 @@ pub fn build(b: *std.Build) !void {
 
     // Android APK example
     const android_step = b.step("android-example", "Build Android example APK");
-    var sdk = AndroidSdk.init(b, 28);
+    var sdk = AndroidSdk.init(b, 29);
     const app = try sdk.createApp(.{
         .manifest = .{
             .package = "com.wgvk.example",
@@ -209,7 +209,7 @@ fn buildLib(b: *std.Build, options: WgvkOptions) !*std.Build.Step.Compile {
                 .root_module = wgvk_mod,
             })
         else blk: {
-            var android = AndroidSdk.init(b, 28);
+            var android = AndroidSdk.init(b, 29);
             break :blk android.addLibrary(.{
                 .name = "wgvk",
                 .root_module = wgvk_mod,

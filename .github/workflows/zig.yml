@@ -46,7 +46,7 @@ jobs:
         if: runner.os == 'Linux'
         uses: android-actions/setup-android@v3
         with:
-          packages: "ndk;27.3.13750724"
+          packages: "ndk;27.3.13750724 platforms;android-29"
 
       - name: Cross Compile
         if: runner.os == 'Linux'
