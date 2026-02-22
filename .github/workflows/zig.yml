@@ -34,7 +34,6 @@ jobs:
         with:
           version: 0.15.1
 
-      # TODO: Add tests and examples
       - name: Build Lib for ${{ matrix.target }}
         run: zig build -Dtarget=${{ matrix.target }} -Doptimize=ReleaseFast --verbose
 
@@ -51,6 +50,10 @@ jobs:
       - name: Cross Compile
         if: runner.os == 'Linux'
         run: zig build -Doptimize=ReleaseFast all --verbose
+
+      - name: Build Android Example
+        if: runner.os == 'Linux'
+        run: zig build -Doptimize=ReleaseFast android-example --verbose
 
       - name: Build Examples Linux
         if: runner.os == 'Linux'
