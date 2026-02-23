@@ -1,7 +1,7 @@
 .{
     .name = .WGVK,
     .version = "0.0.1",
-    .minimum_zig_version = "0.15.1",
+    .minimum_zig_version = "0.14.0",
     .paths = .{""},
     .fingerprint = 0xfa41188e5ce82b6,
     .dependencies = .{
@@ -26,8 +26,8 @@
             .lazy = true,
         },
         .zig_android = .{
-            .url = "git+https://github.com/shreyassanthu77/zig-android.git#5497cc4789ee9baed84b707fb8b97471cc94aa06",
-            .hash = "zig_android-0.0.42-Hyn4Y9lHAQAkRcf9tz82XgsPz4k5FgPqStL2M1KZGOZl",
+            .url = "git+https://github.com/shreyassanthu77/zig-android.git#607d4c887654c87c1f8815e78c2c81450300e836",
+            .hash = "zig_android-0.0.5-Hyn4Y0RcAQCNen2QAzF1ibRfMj35OvbLgkPWW_iK5ZG9",
         },
     },
 }
