@@ -41,7 +41,7 @@ protected:
 
         WGPURequestAdapterOptions options = {};
         options.powerPreference = WGPUPowerPreference_HighPerformance;
-        
+
         struct AdapterCtx {
             WGPUAdapter adapter = nullptr;
             bool done = false;
@@ -62,12 +62,12 @@ protected:
         callbackInfo.userdata1 = &adapterCtx;
 
         WGPUFuture future = wgpuInstanceRequestAdapter(instance, &options, callbackInfo);
-        
+
         WGPUFutureWaitInfo waitInfo = { future, 0 };
         while(!adapterCtx.done) {
             wgpuInstanceWaitAny(instance, 1, &waitInfo, 1000000000); // 1 sec timeout
         }
-        
+
         adapter = adapterCtx.adapter;
         ASSERT_NE(adapter, nullptr) << "Failed to obtain WGPUAdapter";
 
@@ -92,9 +92,9 @@ protected:
 
         WGPUDeviceDescriptor devDesc = {};
         devDesc.label = { "TestDevice", 10 };
-        
+
         future = wgpuAdapterRequestDevice(adapter, &devDesc, devCbInfo);
-        
+
         waitInfo = { future, 0 };
         while(!deviceCtx.done) {
             wgpuInstanceWaitAny(instance, 1, &waitInfo, 1000000000);
@@ -150,15 +150,15 @@ TEST_F(WebGPUTest, BufferReferenceCounting) {
     ASSERT_NE(buffer, nullptr);
 
     // Initial RefCount should be 1
-    wgpuBufferAddRef(buffer); 
+    wgpuBufferAddRef(buffer);
     ASSERT_EQ(buffer->refCount, 2);
-    
+
     wgpuBufferRelease(buffer);
     // RefCount should be 1
     ASSERT_EQ(buffer->refCount, 1);
     wgpuBufferRelease(buffer);
     // RefCount should be 0, memory freed.
-    // Note: Can't easily verify memory free without mocking free(), 
+    // Note: Can't easily verify memory free without mocking free(),
     // but ASan will catch double-free or leaks here.
 }
 
@@ -167,11 +167,11 @@ TEST_F(WebGPUTest, BindGroupKeepsLayoutAlive) {
     entry.binding = 0;
     entry.visibility = WGPUShaderStage_Compute;
     entry.buffer.type = WGPUBufferBindingType_Storage;
-    
+
     WGPUBindGroupLayoutDescriptor bglDesc = {};
     bglDesc.entryCount = 1;
     bglDesc.entries = &entry;
-    
+
     WGPUBindGroupLayout layout = wgpuDeviceCreateBindGroupLayout(device, &bglDesc);
     ASSERT_NE(layout, nullptr);
 
@@ -200,7 +200,7 @@ TEST_F(WebGPUTest, BindGroupKeepsLayoutAlive) {
 
     // This should trigger the final release of the layout.
     wgpuBindGroupRelease(bindGroup);
-    
+
     wgpuBufferRelease(buffer);
 }
 
@@ -211,7 +211,7 @@ TEST_F(WebGPUTest, BufferMappingWrite) {
     desc.mappedAtCreation = false;
 
     WGPUBuffer buffer = wgpuDeviceCreateBuffer(device, &desc);
-    
+
     struct MapCtx {
         bool done = false;
         WGPUMapAsyncStatus status;
@@ -229,7 +229,7 @@ TEST_F(WebGPUTest, BufferMappingWrite) {
     cbInfo.mode = WGPUCallbackMode_WaitAnyOnly;
 
     WGPUFuture future = wgpuBufferMapAsync(buffer, WGPUMapMode_Write, 0, 64, cbInfo);
-    
+
     // Wait
     WGPUFutureWaitInfo waitInfo = { future, 0 };
     while (!mapCtx.done) {
@@ -240,13 +240,13 @@ TEST_F(WebGPUTest, BufferMappingWrite) {
 
     void* ptr = wgpuBufferGetMappedRange(buffer, 0, 64);
     ASSERT_NE(ptr, nullptr);
-    
+
     // Write data
     int* intPtr = (int*)ptr;
     *intPtr = 42;
 
     wgpuBufferUnmap(buffer);
-    
+
     // Check state (conceptually, via API check if available or failure to map again immediately)
     // Cleanup
     wgpuBufferRelease(buffer);
@@ -256,14 +256,14 @@ TEST_F(WebGPUTest, GLSLComputeMultiplication) {
     // 1. Create Data Buffer (Input/Output)
     const uint32_t elementCount = 64;
     const uint32_t bufferSize = elementCount * sizeof(uint32_t);
-    
+
     // Create staging buffer mapped at creation to upload initial data
     WGPUBufferDescriptor stagingDesc = {};
     stagingDesc.size = bufferSize;
     stagingDesc.usage = WGPUBufferUsage_CopySrc | WGPUBufferUsage_MapWrite;
     stagingDesc.mappedAtCreation = true;
     WGPUBuffer stagingBuffer = wgpuDeviceCreateBuffer(device, &stagingDesc);
-    
+
     uint32_t* initialData = (uint32_t*)wgpuBufferGetMappedRange(stagingBuffer, 0, bufferSize);
     for(uint32_t i=0; i<elementCount; ++i) initialData[i] = i;
     wgpuBufferUnmap(stagingBuffer);
@@ -279,7 +279,7 @@ TEST_F(WebGPUTest, GLSLComputeMultiplication) {
     wgpuCommandEncoderCopyBufferToBuffer(encoder, stagingBuffer, 0, storageBuffer, 0, bufferSize);
     WGPUCommandBuffer setupCmd = wgpuCommandEncoderFinish(encoder, nullptr);
     wgpuQueueSubmit(queue, 1, &setupCmd);
-    
+
     // Wait for queue (simple wait idle for test)
     wgpuQueueWaitIdle(queue);
     wgpuCommandBufferRelease(setupCmd);
@@ -291,7 +291,7 @@ TEST_F(WebGPUTest, GLSLComputeMultiplication) {
     const char* glslCode = R"(
         #version 450
         layout(local_size_x = 1) in;
-        
+
         layout(std430, set = 0, binding = 0) buffer Data {
             uint values[];
         } data;
@@ -337,7 +337,7 @@ TEST_F(WebGPUTest, GLSLComputeMultiplication) {
     pipeDesc.layout = pipelineLayout;
     pipeDesc.compute.module = shaderModule;
     pipeDesc.compute.entryPoint = { "main", 4 };
-    
+
     WGPUComputePipeline pipeline = wgpuDeviceCreateComputePipeline(device, &pipeDesc);
     ASSERT_NE(pipeline, nullptr);
 
@@ -358,7 +358,7 @@ TEST_F(WebGPUTest, GLSLComputeMultiplication) {
     encoder = wgpuDeviceCreateCommandEncoder(device, nullptr);
     WGPUComputePassDescriptor passDesc = {}; // Null timestamp writes
     WGPUComputePassEncoder pass = wgpuCommandEncoderBeginComputePass(encoder, &passDesc);
-    
+
     wgpuComputePassEncoderSetPipeline(pass, pipeline);
     wgpuComputePassEncoderSetBindGroup(pass, 0, bindGroup, 0, nullptr);
     wgpuComputePassEncoderDispatchWorkgroups(pass, elementCount, 1, 1);
@@ -381,20 +381,20 @@ TEST_F(WebGPUTest, GLSLComputeMultiplication) {
     encoder = wgpuDeviceCreateCommandEncoder(device, nullptr);
     wgpuCommandEncoderCopyBufferToBuffer(encoder, storageBuffer, 0, readBuffer, 0, bufferSize);
     cmd = wgpuCommandEncoderFinish(encoder, nullptr);
-    
+
     wgpuQueueSubmit(queue, 1, &cmd);
     wgpuCommandEncoderRelease(encoder);
-    
+
     // Intentionally defer releasing the cmd buffer
     // to check refcount validity
     ASSERT_EQ(cmd->refCount, 2);
-    
+
     for(uint32_t i = 0;i < framesInFlight;i++){
         wgpuDeviceTick(device);
     }
     ASSERT_EQ(cmd->refCount, 1);
     wgpuCommandBufferRelease(cmd);
-    
+
     // Map Async
     struct MapCtx { bool done = false; } mapCtx;
     auto mapCb = [](WGPUMapAsyncStatus, WGPUStringView, void* ud, void*) {
@@ -402,7 +402,7 @@ TEST_F(WebGPUTest, GLSLComputeMultiplication) {
     };
     WGPUBufferMapCallbackInfo mapCbInfo = { nullptr, WGPUCallbackMode_WaitAnyOnly, mapCb, &mapCtx, nullptr };
     WGPUFuture mapFut = wgpuBufferMapAsync(readBuffer, WGPUMapMode_Read, 0, bufferSize, mapCbInfo);
-    
+
     WGPUFutureWaitInfo fwi = { mapFut, 0 };
     while(!mapCtx.done) {
         wgpuInstanceWaitAny(instance, 1, &fwi, UINT64_MAX);
@@ -437,7 +437,7 @@ TEST_F(WebGPUTest, QueueWorkDone) {
         WGPUQueueWorkDoneStatus status;
     } workCtx;
 
-    auto workCallback = [](WGPUQueueWorkDoneStatus status, void* userdata, void* u2) {
+    auto workCallback = [](WGPUQueueWorkDoneStatus status, WGPUStringView, void* userdata, void* u2) {
         WorkCtx* ctx = (WorkCtx*)userdata;
         ctx->status = status;
         ctx->done = true;
@@ -449,7 +449,7 @@ TEST_F(WebGPUTest, QueueWorkDone) {
     cbInfo.mode = WGPUCallbackMode_WaitAnyOnly;
 
     WGPUFuture future = wgpuQueueOnSubmittedWorkDone(queue, cbInfo);
-    
+
     // Submit some dummy work to ensure queue progresses
     WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(device, nullptr);
     WGPUCommandBuffer cmd = wgpuCommandEncoderFinish(encoder, nullptr);
@@ -475,10 +475,10 @@ TEST_F(WebGPUTest, BufferCopyRoundTrip) {
     srcDesc.usage = WGPUBufferUsage_MapWrite | WGPUBufferUsage_CopySrc;
     srcDesc.mappedAtCreation = true;
     srcDesc.label = { "SourceBuffer", 12 };
-    
+
     WGPUBuffer srcBuffer = wgpuDeviceCreateBuffer(device, &srcDesc);
     ASSERT_NE(srcBuffer, nullptr);
-    
+
     // Fill with pattern
     uint32_t* srcPtr = (uint32_t*)wgpuBufferGetMappedRange(srcBuffer, 0, dataSize);
     ASSERT_NE(srcPtr, nullptr);
@@ -486,39 +486,39 @@ TEST_F(WebGPUTest, BufferCopyRoundTrip) {
         srcPtr[i] = 0xCAFEBABE + i;
     }
     wgpuBufferUnmap(srcBuffer);
-    
+
     // 2. Create Intermediate Buffer: GPU only
     WGPUBufferDescriptor interDesc = {};
     interDesc.size = dataSize;
-    interDesc.usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_CopySrc; 
+    interDesc.usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_CopySrc;
     interDesc.mappedAtCreation = false;
     interDesc.label = { "IntermediateBuffer", 18 };
-    
+
     WGPUBuffer interBuffer = wgpuDeviceCreateBuffer(device, &interDesc);
     ASSERT_NE(interBuffer, nullptr);
-    
+
     // 3. Create Destination Buffer: Map Read capable
     WGPUBufferDescriptor dstDesc = {};
     dstDesc.size = dataSize;
     dstDesc.usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_MapRead;
     dstDesc.mappedAtCreation = false;
     dstDesc.label = { "DestBuffer", 10 };
-    
+
     WGPUBuffer dstBuffer = wgpuDeviceCreateBuffer(device, &dstDesc);
     ASSERT_NE(dstBuffer, nullptr);
-    
+
     // 4. Encode Copies
     WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(device, nullptr);
-    
+
     // Source -> Intermediate
     wgpuCommandEncoderCopyBufferToBuffer(encoder, srcBuffer, 0, interBuffer, 0, dataSize);
-    
+
     // Intermediate -> Destination
     wgpuCommandEncoderCopyBufferToBuffer(encoder, interBuffer, 0, dstBuffer, 0, dataSize);
-    
+
     WGPUCommandBuffer cmd = wgpuCommandEncoderFinish(encoder, nullptr);
     ASSERT_NE(cmd, nullptr);
-    
+
     // Check RefCounts while command buffer is alive but not yet submitted (or just submitted).
     // Resources should be referenced by the CommandBuffer/ResourceUsage tracking.
     // Expected: 1 (User) + 1 (CommandBuffer/Encoder Tracking) = 2
@@ -528,48 +528,48 @@ TEST_F(WebGPUTest, BufferCopyRoundTrip) {
 
     // 5. Submit
     wgpuQueueSubmit(queue, 1, &cmd);
-    
+
     wgpuCommandEncoderRelease(encoder);
     wgpuCommandBufferRelease(cmd);
-    
+
     // After submission, CommandBuffer ref is gone, but Queue/FrameCache now holds them.
     // wgvk moves tracking to internal frame structures.
-    
+
     // 6. Map Async Destination
-    struct MapCtx { 
-        bool done = false; 
-        WGPUMapAsyncStatus status = WGPUMapAsyncStatus_Error; 
+    struct MapCtx {
+        bool done = false;
+        WGPUMapAsyncStatus status = WGPUMapAsyncStatus_Error;
     } mapCtx;
-    
+
     auto mapCb = [](WGPUMapAsyncStatus status, WGPUStringView, void* ud, void*) {
         auto* ctx = (MapCtx*)ud;
         ctx->status = status;
         ctx->done = true;
     };
-    
+
     WGPUBufferMapCallbackInfo cbInfo = { nullptr, WGPUCallbackMode_WaitAnyOnly, mapCb, &mapCtx, nullptr };
-    
+
     // This implicitly synchronizes access to dstBuffer
     WGPUFuture future = wgpuBufferMapAsync(dstBuffer, WGPUMapMode_Read, 0, dataSize, cbInfo);
-    
+
     // Wait for callback
     WGPUFutureWaitInfo waitInfo = { future, 0 };
     while (!mapCtx.done) {
         wgpuInstanceWaitAny(instance, 1, &waitInfo, UINT64_MAX);
     }
-    
+
     ASSERT_EQ(mapCtx.status, WGPUMapAsyncStatus_Success);
-    
+
     // 7. Verify Data
     const uint32_t* dstPtr = (const uint32_t*)wgpuBufferGetConstMappedRange(dstBuffer, 0, dataSize);
     ASSERT_NE(dstPtr, nullptr);
-    
+
     for(uint32_t i = 0; i < count; ++i) {
         EXPECT_EQ(dstPtr[i], 0xCAFEBABE + i) << "Mismatch at index " << i;
     }
-    
+
     wgpuBufferUnmap(dstBuffer);
-    
+
     // 8. Tick device to cycle frame resources and release internal refs
     // Submit dummy work to move the ring buffer if necessary, or just tick.
     // Based on previous discussion, we might need a dummy submission to prevent the wait-on-zero-sem bug
@@ -578,12 +578,12 @@ TEST_F(WebGPUTest, BufferCopyRoundTrip) {
     for(uint32_t i = 0;i < framesInFlight;i++){
         wgpuDeviceTick(device); // Frame N -> N+1
     }
-    
+
     // Verify RefCounts have dropped back to 1 (only our local variables holding them)
     EXPECT_EQ(srcBuffer->refCount, 1);
     EXPECT_EQ(interBuffer->refCount, 1);
     EXPECT_EQ(dstBuffer->refCount, 1);
-    
+
     // Cleanup
     wgpuBufferRelease(srcBuffer);
     wgpuBufferRelease(interBuffer);
@@ -594,7 +594,7 @@ TEST_F(WebGPUTest, RenderPassClearToRed) {
     // 64 pixels width * 4 bytes = 256 bytes per row (WebGPU requirement aligned)
     const uint32_t width = 64;
     const uint32_t height = 64;
-    const uint32_t bytesPerRow = 256; 
+    const uint32_t bytesPerRow = 256;
     const size_t bufferSize = bytesPerRow * height;
 
     // 1. Create Texture (Render Attachment + Copy Source)
@@ -606,12 +606,12 @@ TEST_F(WebGPUTest, RenderPassClearToRed) {
     texDesc.sampleCount = 1;
     texDesc.dimension = WGPUTextureDimension_2D;
     texDesc.label = { "ColorAttachment", 15 };
-    
+
     WGPUTexture texture = wgpuDeviceCreateTexture(device, &texDesc);
     ASSERT_NE(texture, nullptr);
 
     // 2. Create Default View
-    WGPUTextureView view = wgpuTextureCreateView(texture, nullptr); 
+    WGPUTextureView view = wgpuTextureCreateView(texture, nullptr);
     ASSERT_NE(view, nullptr);
 
     // 3. Create Readback Buffer
@@ -620,24 +620,24 @@ TEST_F(WebGPUTest, RenderPassClearToRed) {
     bufDesc.usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_MapRead;
     bufDesc.mappedAtCreation = false;
     bufDesc.label = { "ReadbackBuffer", 14 };
-    
+
     WGPUBuffer buffer = wgpuDeviceCreateBuffer(device, &bufDesc);
     ASSERT_NE(buffer, nullptr);
 
     // 4. Encode Render Pass
     WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(device, nullptr);
-    
+
     WGPURenderPassColorAttachment colorAtt = {};
     colorAtt.view = view;
     colorAtt.loadOp = WGPULoadOp_Clear;
     colorAtt.storeOp = WGPUStoreOp_Store;
     colorAtt.clearValue = {1.0, 0.0, 0.0, 1.0}; // RED
-    
+
     WGPURenderPassDescriptor rpDesc = {};
     rpDesc.colorAttachmentCount = 1;
     rpDesc.colorAttachments = &colorAtt;
     rpDesc.depthStencilAttachment = nullptr; // No depth
-    
+
     WGPURenderPassEncoder rp = wgpuCommandEncoderBeginRenderPass(encoder, &rpDesc);
     wgpuRenderPassEncoderEnd(rp);
     wgpuRenderPassEncoderRelease(rp);
@@ -663,14 +663,14 @@ TEST_F(WebGPUTest, RenderPassClearToRed) {
 
     // 6. Submit
     wgpuQueueSubmit(queue, 1, &cmd);
-    
+
     // RefCount Check:
-    // Texture should be held by: 
+    // Texture should be held by:
     // 1. User (test variable)
     // 2. View (internal ref)
     // 3. Command Buffer/Resource Usage tracking (pending execution)
-    EXPECT_GE(texture->refCount, 3); 
-    
+    EXPECT_GE(texture->refCount, 3);
+
     wgpuCommandBufferRelease(cmd);
 
     // 7. Map Async & Verify
@@ -680,9 +680,9 @@ TEST_F(WebGPUTest, RenderPassClearToRed) {
         ((MapCtx*)ud)->done = true;
     };
     WGPUBufferMapCallbackInfo cbInfo = { nullptr, WGPUCallbackMode_WaitAnyOnly, mapCb, &mapCtx, nullptr };
-    
+
     WGPUFuture mapFut = wgpuBufferMapAsync(buffer, WGPUMapMode_Read, 0, bufferSize, cbInfo);
-    
+
     WGPUFutureWaitInfo fwi = { mapFut, 0 };
     while(!mapCtx.done) {
         wgpuInstanceWaitAny(instance, 1, &fwi, UINT64_MAX);
@@ -714,7 +714,7 @@ TEST_F(WebGPUTest, RenderPassClearToRed) {
     for(uint32_t i = 0;i < framesInFlight;i++){
         wgpuDeviceTick(device);
     }
-    
+
     // Texture should now only be held by User(1) + View(1) = 2
     EXPECT_EQ(texture->refCount, 2);
     // View held by User(1)
@@ -723,10 +723,10 @@ TEST_F(WebGPUTest, RenderPassClearToRed) {
     EXPECT_EQ(buffer->refCount, 1);
 
     wgpuTextureViewRelease(view);
-    
+
     // View released its hold on Texture, now RefCount = 1
     EXPECT_EQ(texture->refCount, 1);
-    
+
     wgpuTextureRelease(texture);
     wgpuBufferRelease(buffer);
 }
@@ -734,7 +734,7 @@ TEST_F(WebGPUTest, RenderPassClearToRed) {
 TEST_F(WebGPUTest, RenderPassTriangleDraw) {
     const uint32_t width = 64;
     const uint32_t height = 64;
-    const uint32_t bytesPerRow = 256; 
+    const uint32_t bytesPerRow = 256;
     const size_t bufferSize = bytesPerRow * height;
 
     // 1. Setup Shaders
@@ -850,7 +850,7 @@ TEST_F(WebGPUTest, RenderPassTriangleDraw) {
     WGPUTexelCopyTextureInfo srcInfo = {};
     srcInfo.texture = texture;
     srcInfo.aspect = WGPUTextureAspect_All;
-    
+
     WGPUTexelCopyBufferInfo dstInfo = {};
     dstInfo.buffer = readBuffer;
     dstInfo.layout.bytesPerRow = bytesPerRow;
@@ -872,7 +872,7 @@ TEST_F(WebGPUTest, RenderPassTriangleDraw) {
         ((MapCtx*)ud)->done = true;
     };
     WGPUBufferMapCallbackInfo cbInfo = { nullptr, WGPUCallbackMode_WaitAnyOnly, mapCb, &mapCtx, nullptr };
-    
+
     WGPUFuture future = wgpuBufferMapAsync(readBuffer, WGPUMapMode_Read, 0, bufferSize, cbInfo);
     WGPUFutureWaitInfo fwi = { .future = future, .completed = 0 };
 
@@ -893,7 +893,7 @@ TEST_F(WebGPUTest, RenderPassTriangleDraw) {
 
     // Check Inside Triangle (Green)
     // This region is definitely covered by TL-BL-BR triangle (x <= y roughly)
-    checkPixel(10, 50, 0, 255, 0); 
+    checkPixel(10, 50, 0, 255, 0);
     checkPixel(0, 63, 0, 255, 0);
 
     // Check Outside Triangle (Blue Clear Color)
@@ -1263,7 +1263,7 @@ TEST_F(WebGPUTest, LimitsGetAndSet) {
     // Get limits from adapter
     WGPULimits adapterLimits = {0};
     ASSERT_EQ(wgpuAdapterGetLimits(adapter, &adapterLimits), WGPUStatus_Success) << "Failed to get adapter limits";
-    
+
     // Verify that core limits are reasonable (non-zero, within expected ranges)
     EXPECT_GT(adapterLimits.maxTextureDimension1D, 0u);
     EXPECT_GT(adapterLimits.maxTextureDimension2D, 0u);
@@ -1272,9 +1272,9 @@ TEST_F(WebGPUTest, LimitsGetAndSet) {
     EXPECT_GE(adapterLimits.maxBindGroups, 4u); // WebGPU spec minimum is 4
     EXPECT_GT(adapterLimits.maxVertexBuffers, 0u);
     EXPECT_GT(adapterLimits.maxComputeInvocationsPerWorkgroup, 0u);
-    
+
     // Verify alignment limits are power of 2
-    EXPECT_EQ(adapterLimits.minUniformBufferOffsetAlignment & (adapterLimits.minUniformBufferOffsetAlignment - 1), 0u) 
+    EXPECT_EQ(adapterLimits.minUniformBufferOffsetAlignment & (adapterLimits.minUniformBufferOffsetAlignment - 1), 0u)
         << "minUniformBufferOffsetAlignment should be power of 2";
     EXPECT_EQ(adapterLimits.minStorageBufferOffsetAlignment & (adapterLimits.minStorageBufferOffsetAlignment - 1), 0u)
         << "minStorageBufferOffsetAlignment should be power of 2";
@@ -1284,36 +1284,36 @@ TEST_F(WebGPUTest, LimitsGetAndSet) {
         WGPUDevice device = nullptr;
         bool done = false;
     } deviceCtx;
-    
+
     auto deviceCallback = [](WGPURequestDeviceStatus status, WGPUDevice dev, WGPUStringView msg, void* userdata, void* userdata2) {
         DeviceCtx* ctx = (DeviceCtx*)userdata;
         ctx->device = dev;
         ctx->done = true;
     };
-    
+
     WGPULimits requiredLimits = adapterLimits;
     requiredLimits.maxTextureDimension2D = 4096;
     requiredLimits.maxBindGroups = 6;
-    
+
     WGPUDeviceDescriptor deviceDesc3 = {0};
     deviceDesc3.requiredLimits = &requiredLimits;
-    
+
     WGPURequestDeviceCallbackInfo cbInfo = { nullptr, WGPUCallbackMode_WaitAnyOnly, deviceCallback, &deviceCtx, nullptr };
     WGPUFuture future = wgpuAdapterRequestDevice(adapter, &deviceDesc3, cbInfo);
     WGPUFutureWaitInfo fwi = { .future = future, .completed = 0 };
-    
+
     while(!deviceCtx.done) {
         wgpuInstanceWaitAny(instance, 1, &fwi, UINT32_MAX);
     }
-    
+
     ASSERT_NE(deviceCtx.device, nullptr) << "Failed to create device with required limits";
     WGPUDevice device3 = deviceCtx.device;
-    
+
     WGPULimits deviceLimits3 = {0};
     wgpuDeviceGetLimits(device3, &deviceLimits3);
     EXPECT_EQ(deviceLimits3.maxTextureDimension2D, 4096u) << "Device should return requested maxTextureDimension2D";
     EXPECT_EQ(deviceLimits3.maxBindGroups, 6u) << "Device should return requested maxBindGroups";
-    
+
     // TODO: Test that creating textures larger than maxTextureDimension2D fails
     // Currently not enforced, but should be:
     // WGPUTextureDescriptor texDesc = {0};
@@ -1322,7 +1322,7 @@ TEST_F(WebGPUTest, LimitsGetAndSet) {
     // texDesc.usage = WGPUTextureUsage_CopyDst;
     // WGPUTexture tex = wgpuDeviceCreateTexture(device3, &texDesc);
     // EXPECT_EQ(tex, nullptr) << "Should fail to create texture exceeding limits";
-    
+
     wgpuDeviceRelease(device3);
 }
 
@@ -1838,7 +1838,7 @@ TEST_F(WebGPUTest, FenceSignalAndWait) {
         WGPUQueueWorkDoneStatus status = WGPUQueueWorkDoneStatus_Error;
     } ctx;
 
-    auto cb = [](WGPUQueueWorkDoneStatus status, void* ud, void*) {
+    auto cb = [](WGPUQueueWorkDoneStatus status, WGPUStringView, void* ud, void*) {
         WorkCtx* c = (WorkCtx*)ud;
         c->status = status;
         c->done = true;
@@ -1898,7 +1898,7 @@ TEST_F(WebGPUTest, WaitAny_SingleFuture_WorkDone) {
         WGPUQueueWorkDoneStatus status = WGPUQueueWorkDoneStatus_Error;
     } ctx;
 
-    auto cb = [](WGPUQueueWorkDoneStatus status, void* ud, void*) {
+    auto cb = [](WGPUQueueWorkDoneStatus status, WGPUStringView, void* ud, void*) {
         WorkCtx* c = (WorkCtx*)ud;
         c->status = status;
         c->done = true;
@@ -2025,7 +2025,7 @@ TEST_F(WebGPUTest, Edge_QueueWorkDone_NoSubmission) {
         WGPUQueueWorkDoneStatus status = WGPUQueueWorkDoneStatus_Error;
     } ctx;
 
-    auto cb = [](WGPUQueueWorkDoneStatus status, void* ud, void*) {
+    auto cb = [](WGPUQueueWorkDoneStatus status, WGPUStringView, void* ud, void*) {
         WorkCtx* c = (WorkCtx*)ud;
         c->status = status;
         c->done = true;
