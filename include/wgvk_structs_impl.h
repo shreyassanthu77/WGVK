@@ -1418,6 +1418,7 @@ struct WgvkAllocator {
     struct VolkDeviceTable* pFunctions;
     VkPhysicalDevice physicalDevice;
     VkPhysicalDeviceMemoryProperties memoryProperties;
+    wgvk_mutex_t* mutex;
 };
 
 typedef struct ImageUsageRecord{
@@ -1833,12 +1834,16 @@ typedef struct AttachmentDescriptor{
     uint32_t sampleCount;
     VkAttachmentLoadOp loadop;
     VkAttachmentStoreOp storeop;
+    VkAttachmentLoadOp stencilLoadop;
+    VkAttachmentStoreOp stencilStoreop;
 #ifdef __cplusplus
     bool operator==(const AttachmentDescriptor& other)const noexcept{
         return format == other.format
         && sampleCount == other.sampleCount
         && loadop == other.loadop
-        && storeop == other.storeop;
+        && storeop == other.storeop
+        && stencilLoadop == other.stencilLoadop
+        && stencilStoreop == other.stencilStoreop;
     }
     bool operator!=(const AttachmentDescriptor& other) const noexcept{
         return !(*this == other);
@@ -1849,7 +1854,9 @@ static bool attachmentDescriptorCompare(AttachmentDescriptor a, AttachmentDescri
     return a.format      == b.format
         && a.sampleCount == b.sampleCount
         && a.loadop      == b.loadop
-        && a.storeop     == b.storeop;
+        && a.storeop     == b.storeop
+        && a.stencilLoadop  == b.stencilLoadop
+        && a.stencilStoreop == b.stencilStoreop;
 }
 
 
@@ -1932,11 +1939,13 @@ static size_t renderPassLayoutHash(RenderPassLayout layout){
     for(uint32_t i = 0;i < layout.colorAttachmentCount;i++){
         xs_update_u32(&ret, layout.colorAttachments[i].format, layout.colorAttachments[i].sampleCount);
         xs_update_u32(&ret, layout.colorAttachments[i].loadop, layout.colorAttachments[i].storeop);
+        xs_update_u32(&ret, layout.colorAttachments[i].stencilLoadop, layout.colorAttachments[i].stencilStoreop);
     }
     xs_update_u32(&ret, layout.depthAttachmentPresent << 6, layout.depthAttachmentPresent);
     if(layout.depthAttachmentPresent){
         xs_update_u32(&ret, layout.depthAttachment.format, layout.depthAttachment.sampleCount);
         xs_update_u32(&ret, layout.depthAttachment.loadop, layout.depthAttachment.storeop);
+        xs_update_u32(&ret, layout.depthAttachment.stencilLoadop, layout.depthAttachment.stencilStoreop);
     }
     return ret.x64;
 }
@@ -3233,6 +3242,12 @@ static inline VkImageViewType toVulkanTextureViewDimension(WGPUTextureViewDimens
         }
         case WGPUTextureViewDimension_2DArray:{
             return VK_IMAGE_VIEW_TYPE_2D_ARRAY;
+        }
+        case WGPUTextureViewDimension_Cube:{
+            return VK_IMAGE_VIEW_TYPE_CUBE;
+        }
+        case WGPUTextureViewDimension_CubeArray:{
+            return VK_IMAGE_VIEW_TYPE_CUBE_ARRAY;
         }
 
     }

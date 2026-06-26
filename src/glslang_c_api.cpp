@@ -48,7 +48,7 @@ static std::vector<uint32_t> glsl_to_spirv_single(WGPUDevice device, WGPUStringV
     const char* nullterminatedSource = nullptr;
     char* nts = nullptr;
     if(source.length != WGPU_STRLEN){
-        char* nts = (char*)malloc(source.length + 1);
+        nts = (char*)malloc(source.length + 1);
         memcpy(nts, source.data, source.length);
         nts[source.length] = '\0';
         nullterminatedSource = nts;
@@ -127,8 +127,16 @@ WGPUShaderModule wgpuDeviceCreateShaderModuleGLSL(WGPUDevice device, const WGPUS
     wgvk_assert(shDesc->nextInChain->sType == WGPUSType_ShaderSourceGLSL, "nextInChain->sType must be WGPUSType_ShaderSourceGLSL");
     
     WGPUShaderSourceGLSL* source = (WGPUShaderSourceGLSL*)shDesc->nextInChain;
-    std::vector<uint32_t> spirvSource = glsl_to_spirv_single(device, source->code, wgpuShaderStageToGlslang(source->stage), glslang::EShTargetVulkan_1_4, glslang::EShTargetSpv_1_4);
-    
+    auto vulkanTarget = device->capabilities.dynamicRendering
+        ? glslang::EShTargetVulkan_1_3 : glslang::EShTargetVulkan_1_1;
+    auto spirvTarget = device->capabilities.dynamicRendering
+        ? glslang::EShTargetSpv_1_6 : glslang::EShTargetSpv_1_3;
+    std::vector<uint32_t> spirvSource = glsl_to_spirv_single(device, source->code, wgpuShaderStageToGlslang(source->stage), vulkanTarget, spirvTarget);
+
+    if(spirvSource.empty()){
+        return nullptr;
+    }
+
     WGPUShaderModule shadermodule = (WGPUShaderModuleImpl*)RL_CALLOC(1, sizeof(WGPUShaderModuleImpl));
     if (!shadermodule) return nullptr;
 

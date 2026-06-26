@@ -6,8 +6,8 @@
     .fingerprint = 0xfa41188e5ce82b6,
     .dependencies = .{
         .xcode_frameworks = .{
-            .url = "https://github.com/hexops/xcode-frameworks/archive/8a1cfb373587ea4c9bb1468b7c986462d8d4e10e.zip",
-            .hash = "N-V-__8AALShqgXkvqYU6f__FrA22SMWmi2TXCJjNTO1m8XJ",
+            .url = "git+https://github.com/shreyassanthu77/xcode-frameworks.git#d9de76b40c979eb425aad0e365fe57b676b5d6f6",
+            .hash = "N-V-__8AADOnqgUlgd1Wb1ddIDiG1EHw03m7SlLXNpLWgejt",
             .lazy = true,
         },
         .x11_headers = .{
@@ -16,13 +16,13 @@
             .lazy = true,
         },
         .wayland_headers = .{
-            .url = "git+https://github.com/hexops/wayland-headers#7c53e7483c3cfb5c6780ae542c9f5cfa712a826a",
-            .hash = "N-V-__8AAJfbCQBWPD1WA6AuYSk8LAIj4Bo_KY-2Br8NEIKT",
+            .url = "git+https://github.com/shreyassanthu77/wayland-headers.git#bf463e018b9e36974898ce31b92f8a031eea45a2",
+            .hash = "N-V-__8AAGn4CgBM_vzz1o5HRh08JarL3_6N6-VV9XJBgigL",
             .lazy = true,
         },
         .glfw = .{
-            .url = "git+https://github.com/allyourcodebase/glfw#79e7ba3d082765954b59c4f11a2f9b4ff1ecb350",
-            .hash = "glfw-0.0.0-R5AeUo0JGgBvENV2Oz-u0V_unpWhEJTfK4qckBH5da6e",
+            .url = "git+https://github.com/shreyassanthu77/glfw-zig.git#1858deeea9b352345884b9d1c377ff83852a5668",
+            .hash = "glfw-0.0.0-R5AeUpIJGgDNDgvw7sqn2y1tzwhnNnIoKNJHjUuX6pU1",
             .lazy = true,
         },
         .zig_android = .{

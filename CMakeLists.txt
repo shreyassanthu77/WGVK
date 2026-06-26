@@ -4,7 +4,7 @@ include(FetchContent)
 
 option(WGVK_BUILD_EXAMPLES "Build some WGVK examples" OFF)
 option(WGVK_BUILD_GLSL_SUPPORT "Build the GLSL->SPIRV compiler (glslang)" OFF)
-set(WGVK_WGSL_SUPPORT "OFF" CACHE STRING "WGSL->SPIRV backend: OFF, TINT, SIMPLE_WGSL")
+set(WGVK_WGSL_SUPPORT "SIMPLE_WGSL" CACHE STRING "WGSL->SPIRV backend: OFF, TINT, SIMPLE_WGSL")
 set_property(CACHE WGVK_WGSL_SUPPORT PROPERTY STRINGS "OFF" "TINT" "SIMPLE_WGSL")
 if(NOT WGVK_WGSL_SUPPORT STREQUAL "OFF" AND NOT WGVK_WGSL_SUPPORT STREQUAL "TINT" AND NOT WGVK_WGSL_SUPPORT STREQUAL "SIMPLE_WGSL")
   message(FATAL_ERROR "WGVK_WGSL_SUPPORT must be OFF, TINT, or SIMPLE_WGSL (got: ${WGVK_WGSL_SUPPORT})")
@@ -96,6 +96,13 @@ else()
 endif()
 set(BUNDLE_LIST "")
 
+# Expose the internal VirtualAllocator helpers (allocator_create/destroy/alloc/free)
+# with extern linkage so they are reachable from the dedicated allocator unit
+# tests. These names are not part of the public API; they are obscure enough not
+# to collide with anything else, and exposing them avoids having to compile
+# wgvk.c twice.
+target_compile_definitions(${WGVK_PRIMARY_TARGET_NAME} PRIVATE WGVK_ALLOCATOR_INTERNAL_LINKAGE=)
+
 target_compile_features(${WGVK_PRIMARY_TARGET_NAME} PUBLIC c_std_11)
 if(MSVC)
   target_compile_options(${WGVK_PRIMARY_TARGET_NAME} PUBLIC "/experimental:c11atomics")
@@ -164,7 +171,7 @@ if(WGVK_WGSL_SUPPORT STREQUAL "TINT")
     $<$<CXX_COMPILER_ID:MSVC>:/Zc:preprocessor>
     $<$<CXX_COMPILER_ID:MSVC>:/GR->  # disable RTTI in MSVC
   )
-  target_compile_definitions(${WGVK_PRIMARY_TARGET_NAME} PUBLIC SUPPORT_WGSL=1)
+  target_compile_definitions(${WGVK_PRIMARY_TARGET_NAME} PUBLIC SUPPORT_WGSL=1 WGVK_WGSL_BACKEND_TINT=1)
 
   list(APPEND BUNDLE_LIST ${WGVK_PRIMARY_TARGET_NAME} tint_lang_wgsl_reader tint_lang_spirv_writer tint_lang_wgsl_inspector tint_c_api)
 
@@ -174,7 +181,11 @@ elseif(WGVK_WGSL_SUPPORT STREQUAL "SIMPLE_WGSL")
   target_include_directories(${WGVK_PRIMARY_TARGET_NAME} PUBLIC include)
 
   if(NOT TARGET wgsl_compiler)
-    set(WGSL_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    set(WGSL_BUILD_COMPILER_TESTS OFF CACHE BOOL "Build simple_wgsl compiler unit tests")
+    set(WGSL_BUILD_VULKAN_TESTS   OFF CACHE BOOL "Build simple_wgsl Vulkan shader tests")
+    set(WGSL_BUILD_CUVK_TESTS     OFF CACHE BOOL "Build simple_wgsl CUVK runtime tests")
+    set(WGSL_BUILD_FFT_TESTS      OFF CACHE BOOL "Build simple_wgsl FFT generator tests")
+    set(WGSL_BUILD_E2E_TESTS      OFF CACHE BOOL "Build simple_wgsl end-to-end PTX tests")
     set(SIMPLE_WGSL_LOCAL "${CMAKE_CURRENT_LIST_DIR}/../simple_wgsl")
     if(EXISTS "${SIMPLE_WGSL_LOCAL}/CMakeLists.txt")
       add_subdirectory("${SIMPLE_WGSL_LOCAL}" "${CMAKE_CURRENT_BINARY_DIR}/simple_wgsl")
@@ -190,9 +201,13 @@ elseif(WGVK_WGSL_SUPPORT STREQUAL "SIMPLE_WGSL")
   endif()
 
   add_library(simple_wgsl_c_api STATIC "src/simple_wgsl_c_api.c")
+  target_compile_features(simple_wgsl_c_api PUBLIC c_std_11)
+  if(MSVC)
+    target_compile_options(simple_wgsl_c_api PUBLIC "/experimental:c11atomics")
+  endif()
   target_include_directories(simple_wgsl_c_api PUBLIC "${CMAKE_CURRENT_LIST_DIR}/include")
   target_link_libraries(simple_wgsl_c_api PUBLIC wgsl_compiler)
-  target_compile_definitions(${WGVK_PRIMARY_TARGET_NAME} PUBLIC SUPPORT_WGSL=1)
+  target_compile_definitions(${WGVK_PRIMARY_TARGET_NAME} PUBLIC SUPPORT_WGSL=1 WGVK_WGSL_BACKEND_SIMPLE_WGSL=1)
 
   list(APPEND BUNDLE_LIST ${WGVK_PRIMARY_TARGET_NAME} wgsl_compiler simple_wgsl_c_api)
 
@@ -242,7 +257,7 @@ endif()
 if(BUILD_SHARED_LIBS)
   if(TARGET wgvk_core)
     set_target_properties(wgvk_core PROPERTIES DEFINE_SYMBOL WGVK_EXPORTS=1)
-    #set_target_properties(wgvk_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
+    set_target_properties(wgvk_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
   else()
     set_target_properties(wgvk PROPERTIES POSITION_INDEPENDENT_CODE ON)
     #set_target_properties(wgvk PROPERTIES DEFINE_SYMBOL WGVK_EXPORTS=1)
@@ -252,9 +267,6 @@ if(BUILD_SHARED_LIBS)
     target_compile_definitions(wgvk_core PRIVATE WGVK_SHARED_LIBRARY=1 WGVK_EXPORTS=1)
   endif()
   target_compile_definitions(wgvk PRIVATE WGVK_SHARED_LIBRARY=1 WGVK_EXPORTS=1)
-  if(NOT APPLE)
-    target_link_options(wgvk PRIVATE "-static")
-  endif()
   if(WGVK_WGSL_SUPPORT STREQUAL "TINT")
     set_target_properties(tint_c_api PROPERTIES POSITION_INDEPENDENT_CODE ON)
   elseif(WGVK_WGSL_SUPPORT STREQUAL "SIMPLE_WGSL")
@@ -438,4 +450,13 @@ if(BUILD_TESTING)
   target_link_libraries(unit_tests GTest::gtest_main wgvk)
   include(GoogleTest)
   gtest_discover_tests(unit_tests)
+
+  # Dedicated, headless tests for the bitmap-based VirtualAllocator and the
+  # public wgvkAllocator_* surface. These do not require a Vulkan device for
+  # the inner-allocator suite; the device-backed suite is auto-skipped when no
+  # adapter is available.
+  add_executable(allocator_unit_tests tests/wgvk_allocator_tests.cpp)
+  target_compile_features(allocator_unit_tests PRIVATE cxx_std_20)
+  target_link_libraries(allocator_unit_tests PRIVATE GTest::gtest_main wgvk)
+  gtest_discover_tests(allocator_unit_tests)
 endif()

@@ -4,6 +4,7 @@ build-*/
 .vscode/
 .zig-cache/
 zig-out/
+zig-pkg/
 
 # Release artifacts
 dist/

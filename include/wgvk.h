@@ -408,11 +408,11 @@ typedef enum WGPUPolygonMode {
     WGPUPolygonMode_Force32 = 0x7FFFFFFF
 } WGPUPolygonMode WGPU_ENUM_ATTRIBUTE;
 
-typedef enum WGPUVertexStepMode { 
-    WGPUVertexStepMode_Undefined = 0x0, 
+typedef enum WGPUVertexStepMode {
+    WGPUVertexStepMode_Undefined = 0x0,
     WGPUVertexStepMode_Vertex = 0x1,
     WGPUVertexStepMode_Instance = 0x2,
-    WGPUVertexStepMode_Force32 = 0x7FFFFFFF 
+    WGPUVertexStepMode_Force32 = 0x7FFFFFFF
 } WGPUVertexStepMode;
 
 typedef enum WGPUIndexFormat {
@@ -910,7 +910,7 @@ typedef void (*WGPUCompilationInfoCallback)(WGPUCompilationInfoRequestStatus sta
 typedef void (*WGPUCreateComputePipelineAsyncCallback)(WGPUCreatePipelineAsyncStatus status, WGPUComputePipeline pipeline, WGPUStringView message, WGPU_NULLABLE void* userdata1, WGPU_NULLABLE void* userdata2) WGPU_FUNCTION_ATTRIBUTE;
 typedef void (*WGPUCreateRenderPipelineAsyncCallback)(WGPUCreatePipelineAsyncStatus status, WGPURenderPipeline pipeline, WGPUStringView message, WGPU_NULLABLE void* userdata1, WGPU_NULLABLE void* userdata2) WGPU_FUNCTION_ATTRIBUTE;
 typedef void (*WGPUPopErrorScopeCallback)(WGPUPopErrorScopeStatus status, WGPUErrorType type, WGPUStringView message, WGPU_NULLABLE void* userdata1, WGPU_NULLABLE void* userdata2) WGPU_FUNCTION_ATTRIBUTE;
-typedef void (*WGPUQueueWorkDoneCallback)(WGPUQueueWorkDoneStatus status, WGPU_NULLABLE void* userdata1, WGPU_NULLABLE void* userdata2) WGPU_FUNCTION_ATTRIBUTE;
+typedef void (*WGPUQueueWorkDoneCallback)(WGPUQueueWorkDoneStatus status, WGPUStringView message, WGPU_NULLABLE void* userdata1, WGPU_NULLABLE void* userdata2) WGPU_FUNCTION_ATTRIBUTE;
 
 // Missing Structs
 typedef struct WGPUCompilationInfoCallbackInfo {
@@ -1136,9 +1136,9 @@ typedef struct WGPUSurfaceSourceDrmPlane {
     uint32_t  crtcId;
     uint32_t  planeId;
 
-    
+
     WGPUDrmModeSelect modeSelect;
-    
+
     WGPUBool acquireExclusive;
 } WGPUSurfaceSourceDrmPlane;
 
@@ -1328,7 +1328,7 @@ typedef void (*WGPUUncapturedErrorCallback)(const WGPUDevice*, WGPUErrorType, st
 
 typedef struct WGPUDeviceLostCallbackInfo {
     WGPUChainedStruct * nextInChain;
-    int mode;
+    WGPUCallbackMode mode;
     WGPUDeviceLostCallback callback;
     void* userdata1;
     void* userdata2;
@@ -1682,9 +1682,9 @@ typedef struct WGPUStencilFaceState {
 typedef struct WGPUDepthStencilState {
     WGPUChainedStruct* nextInChain;
     WGPUTextureFormat format;
-    WGPUBool32 depthWriteEnabled;
+    WGPUOptionalBool depthWriteEnabled;
     WGPUCompareFunction depthCompare;
-    
+
     WGPUStencilFaceState stencilFront;
     WGPUStencilFaceState stencilBack;
     uint32_t stencilReadMask;
@@ -2022,7 +2022,6 @@ WGVK_EXPORT void wgpuRaytracingPassEncoderSetPipeline            (WGPURaytracing
 WGVK_EXPORT void wgpuRaytracingPassEncoderSetBindGroup           (WGPURaytracingPassEncoder cpe, uint32_t groupIndex, WGPUBindGroup bindGroup, uint32_t dynamicOffsetCount, const uint32_t* dynamicOffsets);
 WGVK_EXPORT void wgpuRaytracingPassEncoderTraceRays              (WGPURaytracingPassEncoder cpe,  uint32_t rayGenerationOffset, uint32_t rayHitOffset, uint32_t rayMissOffset, uint32_t width, uint32_t height, uint32_t depth);
 WGVK_EXPORT void wgpuComputePassEncoderDispatchWorkgroups        (WGPUComputePassEncoder cpe, uint32_t x, uint32_t y, uint32_t z);
-WGVK_EXPORT void wgpuComputePassEncoderRelease                   (WGPUComputePassEncoder cpenc);
 WGVK_EXPORT void wgpuSurfaceGetCurrentTexture                    (WGPUSurface surface, WGPUSurfaceTexture * surfaceTexture);
 WGVK_EXPORT WGPUStatus wgpuSurfacePresent                              (WGPUSurface surface);
 WGVK_EXPORT WGPURaytracingPassEncoder wgpuCommandEncoderBeginRaytracingPass(WGPUCommandEncoder enc, const WGPURayTracingPassDescriptor* rtDesc);
@@ -2030,7 +2029,7 @@ WGVK_EXPORT void wgpuRaytracingPassEncoderEnd(WGPURaytracingPassEncoder commandE
 WGVK_EXPORT WGPUComputePassEncoder wgpuCommandEncoderBeginComputePass(WGPUCommandEncoder enc, const WGPUComputePassDescriptor* cpdesc);
 WGVK_EXPORT void wgpuComputePassEncoderEnd(WGPUComputePassEncoder commandEncoder);
 WGVK_EXPORT WGPURenderPassEncoder wgpuCommandEncoderBeginRenderPass(WGPUCommandEncoder enc, const WGPURenderPassDescriptor* rpdesc);
-    
+
 WGVK_EXPORT void wgpuCommandEncoderBuildRayTracingAccelerationContainer(WGPUCommandEncoder encoder, WGPURayTracingAccelerationContainer container);
 WGVK_EXPORT void wgpuCommandEncoderCopyRayTracingAccelerationContainer(WGPUCommandEncoder encoder, WGPURayTracingAccelerationContainer source, WGPURayTracingAccelerationContainer dest);
 WGVK_EXPORT void wgpuCommandEncoderUpdateRayTracingAccelerationContainer(WGPUCommandEncoder encoder, WGPURayTracingAccelerationContainer container);
@@ -2151,7 +2150,7 @@ WGVK_EXPORT void wgpuInstanceAddRef                       (WGPUInstance instance
 WGVK_EXPORT void wgpuAdapterAddRef                        (WGPUAdapter adapter);
 WGVK_EXPORT void wgpuDeviceAddRef                         (WGPUDevice device);
 WGVK_EXPORT void wgpuQueueAddRef                          (WGPUQueue device);
-WGVK_EXPORT void wgpuReleaseRaytracingPassEncoder         (WGPURaytracingPassEncoder rtenc);
+WGVK_EXPORT void wgpuRaytracingPassEncoderRelease         (WGPURaytracingPassEncoder rtenc);
 WGVK_EXPORT void wgpuTextureAddRef                        (WGPUTexture texture);
 WGVK_EXPORT void wgpuTextureViewAddRef                    (WGPUTextureView textureView);
 WGVK_EXPORT void wgpuSamplerAddRef                        (WGPUSampler texture);
@@ -2171,8 +2170,7 @@ WGVK_EXPORT void wgpuComputePassEncoderRelease            (WGPUComputePassEncode
 WGVK_EXPORT void wgpuComputePipelineRelease               (WGPUComputePipeline pipeline);
 WGVK_EXPORT void wgpuRenderPipelineRelease                (WGPURenderPipeline pipeline);
 WGVK_EXPORT void wgpuBufferRelease                        (WGPUBuffer buffer);
-WGVK_EXPORT void wgpuBindGroupRelease                     (WGPUBindGroup commandBuffer);
-WGVK_EXPORT void wgpuBindGroupLayoutRelease               (WGPUBindGroupLayout commandBuffer);
+WGVK_EXPORT void wgpuBindGroupRelease                     (WGPUBindGroup bindGroup);
 WGVK_EXPORT void wgpuBindGroupLayoutRelease               (WGPUBindGroupLayout bglayout);
 WGVK_EXPORT void wgpuPipelineLayoutRelease                (WGPUPipelineLayout layout);
 WGVK_EXPORT void wgpuTextureRelease                       (WGPUTexture texture);

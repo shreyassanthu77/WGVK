@@ -122,15 +122,20 @@ RGAPI tc_SpirvBlob wgslToSpirv(
   memcpy(src, source->code.data, length);
   src[length] = '\0';
 
-  WgslAstNode *ast = wgsl_parse(src);
+  WgslParseResult pr = wgsl_parse(src);
+  WgslAstNode *ast = pr.value;
   if (!ast) {
+    wgsl_diagnostic_list_free(pr.diags);
     RL_FREE(src);
     return ret;
   }
 
-  WgslResolver *resolver = wgsl_resolver_build(ast);
+  WgslResolveResult rr = wgsl_resolver_build(ast);
+  WgslResolver *resolver = rr.value;
   if (!resolver) {
+    wgsl_diagnostic_list_free(rr.diags);
     wgsl_free_ast(ast);
+    wgsl_diagnostic_list_free(pr.diags);
     RL_FREE(src);
     return ret;
   }
@@ -143,36 +148,40 @@ RGAPI tc_SpirvBlob wgslToSpirv(
   memset(&opts, 0, sizeof(opts));
   opts.env = WGSL_LOWER_ENV_VULKAN_1_1;
 
-  uint32_t *spirv = NULL;
-  size_t word_count = 0;
-  WgslLowerResult res =
-      wgsl_lower_emit_spirv(ast, resolver, &opts, &spirv, &word_count);
+  WgslLowerSpirvResult lsr = wgsl_lower_emit_spirv(ast, resolver, &opts);
 
-  if (res != WGSL_LOWER_OK || !spirv) {
+  if (lsr.code != WGSL_LOWER_OK || !lsr.words) {
+    if (lsr.words) wgsl_lower_free(lsr.words);
+    wgsl_diagnostic_list_free(lsr.diags);
     wgsl_resolver_free(resolver);
+    wgsl_diagnostic_list_free(rr.diags);
     wgsl_free_ast(ast);
+    wgsl_diagnostic_list_free(pr.diags);
     RL_FREE(src);
     return ret;
   }
 
-  size_t byte_count = word_count * sizeof(uint32_t);
+  size_t byte_count = lsr.word_count * sizeof(uint32_t);
   for (int i = 0; i < ep_count && i < 16; i++) {
     uint32_t stage_idx = StageToEnum(eps[i].stage);
     if (stage_idx >= 16) continue;
 
     ret.entryPoints[stage_idx].codeSize = byte_count;
     ret.entryPoints[stage_idx].code =
-        (uint32_t *)RL_CALLOC(word_count, sizeof(uint32_t));
-    memcpy(ret.entryPoints[stage_idx].code, spirv, byte_count);
+        (uint32_t *)RL_CALLOC(lsr.word_count, sizeof(uint32_t));
+    memcpy(ret.entryPoints[stage_idx].code, lsr.words, byte_count);
 
     size_t name_len = strlen(eps[i].name);
     if (name_len > 15) name_len = 15;
     memcpy(ret.entryPoints[stage_idx].entryPointName, eps[i].name, name_len);
   }
 
-  wgsl_lower_free(spirv);
+  wgsl_lower_free(lsr.words);
+  wgsl_diagnostic_list_free(lsr.diags);
   wgsl_resolver_free(resolver);
+  wgsl_diagnostic_list_free(rr.diags);
   wgsl_free_ast(ast);
+  wgsl_diagnostic_list_free(pr.diags);
   RL_FREE(src);
   return ret;
 }
@@ -189,15 +198,20 @@ RGAPI WGPUReflectionInfo reflectionInfo_wgsl_sync(WGPUStringView wgslSource) {
   memcpy(src, wgslSource.data, length);
   src[length] = '\0';
 
-  WgslAstNode *ast = wgsl_parse(src);
+  WgslParseResult pr = wgsl_parse(src);
+  WgslAstNode *ast = pr.value;
   if (!ast) {
+    wgsl_diagnostic_list_free(pr.diags);
     RL_FREE(src);
     return ret;
   }
 
-  WgslResolver *resolver = wgsl_resolver_build(ast);
+  WgslResolveResult rr = wgsl_resolver_build(ast);
+  WgslResolver *resolver = rr.value;
   if (!resolver) {
+    wgsl_diagnostic_list_free(rr.diags);
     wgsl_free_ast(ast);
+    wgsl_diagnostic_list_free(pr.diags);
     RL_FREE(src);
     return ret;
   }
@@ -207,10 +221,15 @@ RGAPI WGPUReflectionInfo reflectionInfo_wgsl_sync(WGPUStringView wgslSource) {
   opts.env = WGSL_LOWER_ENV_VULKAN_1_1;
   opts.enable_debug_names = 1;
 
-  WgslLower *lower = wgsl_lower_create(ast, resolver, &opts);
-  if (!lower) {
+  WgslLowerResult lr = wgsl_lower_create(ast, resolver, &opts);
+  WgslLower *lower = lr.value;
+  if (lr.code != WGSL_LOWER_OK || !lower) {
+    if (lower) wgsl_lower_destroy(lower);
+    wgsl_diagnostic_list_free(lr.diags);
     wgsl_resolver_free(resolver);
+    wgsl_diagnostic_list_free(rr.diags);
     wgsl_free_ast(ast);
+    wgsl_diagnostic_list_free(pr.diags);
     RL_FREE(src);
     return ret;
   }
