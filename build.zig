@@ -7,6 +7,9 @@ pub fn build(b: *std.Build) !void {
     const support_drm = b.option(bool, "drm", "Support Direct Rendering Infrastructure Surfaces (Linux)") orelse false;
     const enable_x11 = b.option(bool, "x11", "Enable X11 support") orelse true;
     const enable_wayland = b.option(bool, "wayland", "Enable Wayland support") orelse true;
+    const skip_build = b.option(bool, "skip_build", "Skips everything in the build script. used internally") orelse false;
+    if (skip_build) return;
+
     const wgvk_options = WgvkOptions{
         .target = target,
         .optimize = optimize,
@@ -16,7 +19,7 @@ pub fn build(b: *std.Build) !void {
         .enable_wayland = enable_wayland,
     };
 
-    const wgvk_lib = try buildLib(b, wgvk_options);
+    const wgvk_lib = try buildLib1(b, wgvk_options);
     b.installArtifact(wgvk_lib);
 
     const examples_step = b.step("examples", "Build examples");
@@ -28,6 +31,7 @@ pub fn build(b: *std.Build) !void {
         "rgfw_surface",
     };
     for (examples) |src| {
+        if (src.len == 0) continue;
         const example_output = buildExample(b, wgvk_options, wgvk_lib, src) catch continue;
         examples_step.dependOn(&example_output.step);
     }
@@ -53,7 +57,7 @@ pub fn build(b: *std.Build) !void {
     };
     for (build_targets) |t| {
         const resolved_target = b.resolveTargetQuery(t);
-        const lib = try buildLib(b, .{
+        const lib = try buildLib1(b, .{
             .target = resolved_target,
             .optimize = optimize,
             .use_vma = use_vma,
@@ -81,7 +85,16 @@ const WgvkOptions = struct {
     enable_wayland: bool,
 };
 
-fn buildLib(b: *std.Build, options: WgvkOptions) !*std.Build.Step.Compile {
+pub fn buildLib(b: *std.Build, options: WgvkOptions) !*std.Build.Step.Compile {
+    const self = b.dependencyFromBuildZig(@This(), .{
+        .target = options.target,
+        .optimize = options.optimize,
+        .skip_build = true,
+    });
+    return buildLib1(self.builder, options);
+}
+
+fn buildLib1(b: *std.Build, options: WgvkOptions) !*std.Build.Step.Compile {
     const wgvk_mod = b.createModule(.{
         .target = options.target,
         .optimize = options.optimize,
