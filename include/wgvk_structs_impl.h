@@ -2992,19 +2992,15 @@ static inline VkCompositeAlphaFlagsKHR toVulkanCompositeAlphaMode(WGPUCompositeA
 
 
 static inline bool isMultiplanarFormat(WGPUTextureFormat format){
-    switch(format){
-        case WGPUTextureFormat_R8BG8Biplanar420Unorm:
-        case WGPUTextureFormat_R10X6BG10X6Biplanar420Unorm:
-        case WGPUTextureFormat_R8BG8A8Triplanar420Unorm:
-        case WGPUTextureFormat_R8BG8Biplanar422Unorm:
-        case WGPUTextureFormat_R8BG8Biplanar444Unorm:
-        case WGPUTextureFormat_R10X6BG10X6Biplanar422Unorm:
-        case WGPUTextureFormat_R10X6BG10X6Biplanar444Unorm:
-        case WGPUTextureFormat_External:
-            return true;
-        default:
-            return false;
-    }
+    return
+        format == WGPUTextureFormat_R8BG8Biplanar420Unorm ||
+        format == WGPUTextureFormat_R10X6BG10X6Biplanar420Unorm ||
+        format == WGPUTextureFormat_R8BG8A8Triplanar420Unorm ||
+        format == WGPUTextureFormat_R8BG8Biplanar422Unorm ||
+        format == WGPUTextureFormat_R8BG8Biplanar444Unorm ||
+        format == WGPUTextureFormat_R10X6BG10X6Biplanar422Unorm ||
+        format == WGPUTextureFormat_R10X6BG10X6Biplanar444Unorm ||
+        format == WGPUTextureFormat_External;
 }
 
 static inline VkImageAspectFlags toVulkanAspectMask(WGPUTextureAspect aspect, WGPUTextureFormat format){
@@ -3313,8 +3309,21 @@ static inline WGPUTextureDimension fromVulkanTextureDimension(VkImageType dim){
 }
 
 
-// Converts WGPUTextureFormat to VkFormat
+// Converts WGPUTextureFormat to VkFormat.
+// Note: multiplanar formats intentionally share numeric values with standard
+// formats in upstream Dawn (0-6). They are handled first so that callers using
+// the multiplanar enum constants get the expected Vulkan format. Passing
+// WGPUTextureFormat_Undefined (also 0) will therefore return a multiplanar
+// format here; callers should validate formats before conversion.
 static inline VkFormat toVulkanPixelFormat(WGPUTextureFormat format) {
+    if (format == WGPUTextureFormat_R8BG8Biplanar420Unorm) return VK_FORMAT_G8_B8R8_2PLANE_420_UNORM;
+    if (format == WGPUTextureFormat_R10X6BG10X6Biplanar420Unorm) return VK_FORMAT_G10X6_B10X6R10X6_2PLANE_420_UNORM_3PACK16;
+    if (format == WGPUTextureFormat_R8BG8A8Triplanar420Unorm) return VK_FORMAT_G8_B8_R8_3PLANE_420_UNORM;
+    if (format == WGPUTextureFormat_R8BG8Biplanar422Unorm) return VK_FORMAT_G8_B8R8_2PLANE_422_UNORM;
+    if (format == WGPUTextureFormat_R8BG8Biplanar444Unorm) return VK_FORMAT_G8_B8R8_2PLANE_444_UNORM;
+    if (format == WGPUTextureFormat_R10X6BG10X6Biplanar422Unorm) return VK_FORMAT_G10X6_B10X6R10X6_2PLANE_422_UNORM_3PACK16;
+    if (format == WGPUTextureFormat_R10X6BG10X6Biplanar444Unorm) return VK_FORMAT_G10X6_B10X6R10X6_2PLANE_444_UNORM_3PACK16;
+
     switch (format) {
         case WGPUTextureFormat_Undefined:            return VK_FORMAT_UNDEFINED;
         case WGPUTextureFormat_R8Unorm:              return VK_FORMAT_R8_UNORM;
@@ -3418,13 +3427,6 @@ static inline VkFormat toVulkanPixelFormat(WGPUTextureFormat format) {
         case WGPUTextureFormat_ASTC12x10UnormSrgb:   return VK_FORMAT_ASTC_12x10_SRGB_BLOCK;
         case WGPUTextureFormat_ASTC12x12Unorm:       return VK_FORMAT_ASTC_12x12_UNORM_BLOCK;
         case WGPUTextureFormat_ASTC12x12UnormSrgb:   return VK_FORMAT_ASTC_12x12_SRGB_BLOCK;
-        case WGPUTextureFormat_R8BG8Biplanar420Unorm: return VK_FORMAT_G8_B8R8_2PLANE_420_UNORM;
-        case WGPUTextureFormat_R10X6BG10X6Biplanar420Unorm: return VK_FORMAT_G10X6_B10X6R10X6_2PLANE_420_UNORM_3PACK16;
-        case WGPUTextureFormat_R8BG8A8Triplanar420Unorm: return VK_FORMAT_G8_B8_R8_3PLANE_420_UNORM;
-        case WGPUTextureFormat_R8BG8Biplanar422Unorm: return VK_FORMAT_G8_B8R8_2PLANE_422_UNORM;
-        case WGPUTextureFormat_R8BG8Biplanar444Unorm: return VK_FORMAT_G8_B8R8_2PLANE_444_UNORM;
-        case WGPUTextureFormat_R10X6BG10X6Biplanar422Unorm: return VK_FORMAT_G10X6_B10X6R10X6_2PLANE_422_UNORM_3PACK16;
-        case WGPUTextureFormat_R10X6BG10X6Biplanar444Unorm: return VK_FORMAT_G10X6_B10X6R10X6_2PLANE_444_UNORM_3PACK16;
         // WGPUTextureFormat_Force32 is a utility, not a real format.
         default:                                     return VK_FORMAT_UNDEFINED;
     }
