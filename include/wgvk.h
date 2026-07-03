@@ -255,9 +255,10 @@ typedef enum WGPUTextureAspect {
     WGPUTextureAspect_All         = 0x00000001,
     WGPUTextureAspect_StencilOnly = 0x00000002,
     WGPUTextureAspect_DepthOnly   = 0x00000003,
-    WGPUTextureAspect_Plane0Only  = 0x00050000,
-    WGPUTextureAspect_Plane1Only  = 0x00050001,
-    WGPUTextureAspect_Plane2Only  = 0x00050002,
+    // Plane aspects intentionally alias Undefined/All/DepthOnly to match Dawn.
+    WGPUTextureAspect_Plane0Only  = 0x00000000,
+    WGPUTextureAspect_Plane1Only  = 0x00000001,
+    WGPUTextureAspect_Plane2Only  = 0x00000002,
     WGPUTextureAspect_Force32     = 0x7FFFFFFF
 } WGPUTextureAspect;
 
@@ -281,9 +282,9 @@ typedef enum WGPUSType {
     WGPUSType_SurfaceSourceAndroidNativeWindow = 0x00000008,
     WGPUSType_SurfaceSourceXCBWindow = 0x00000009,
     WGPUSType_SurfaceColorManagement = 0x0000000A,
+    WGPUSType_TextureComponentSwizzleDescriptor = 0x0000000C,
     WGPUSType_EmscriptenSurfaceSourceCanvasHTMLSelector = 0x00040000,
-    // non-standard sTypes
-    WGPUSType_TextureComponentSwizzleDescriptor = 0x00050047,
+    // WGVK-specific sTypes (keep out of Dawn's standard value range)
     WGPUSType_InstanceLayerSelection = 0x10000001,
     WGPUSType_BufferAllocatorSelector = 0x10000002,
     WGPUSType_ShaderSourceGLSL = 0x10000003,
@@ -382,7 +383,7 @@ typedef enum WGPULoadOp {
     WGPULoadOp_Undefined = 0x00000000,
     WGPULoadOp_Load = 0x00000001,
     WGPULoadOp_Clear = 0x00000002,
-    WGPULoadOp_ExpandResolveTexture = 0x00050003,
+    WGPULoadOp_ExpandResolveTexture = 0x00000003,
     WGPULoadOp_Force32 = 0x7FFFFFFF
 } WGPULoadOp;
 
@@ -811,28 +812,29 @@ typedef enum WGPUInstanceFeatureName {
 } WGPUInstanceFeatureName WGPU_ENUM_ATTRIBUTE;
 
 typedef enum WGPUFeatureName {
-    WGPUFeatureName_DepthClipControl = 0x00000001,
-    WGPUFeatureName_Depth32FloatStencil8 = 0x00000002,
-    WGPUFeatureName_TimestampQuery = 0x00000003,
+    WGPUFeatureName_CoreFeaturesAndLimits = 0x00000001,
+    WGPUFeatureName_DepthClipControl = 0x00000002,
+    WGPUFeatureName_Depth32FloatStencil8 = 0x00000003,
     WGPUFeatureName_TextureCompressionBC = 0x00000004,
     WGPUFeatureName_TextureCompressionBCSliced3D = 0x00000005,
     WGPUFeatureName_TextureCompressionETC2 = 0x00000006,
     WGPUFeatureName_TextureCompressionASTC = 0x00000007,
     WGPUFeatureName_TextureCompressionASTCSliced3D = 0x00000008,
-    WGPUFeatureName_IndirectFirstInstance = 0x00000009,
-    WGPUFeatureName_ShaderF16 = 0x0000000A,
-    WGPUFeatureName_RG11B10UfloatRenderable = 0x0000000B,
-    WGPUFeatureName_BGRA8UnormStorage = 0x0000000C,
-    WGPUFeatureName_Float32Filterable = 0x0000000D,
-    WGPUFeatureName_Float32Blendable = 0x0000000E,
-    WGPUFeatureName_ClipDistances = 0x0000000F,
-    WGPUFeatureName_DualSourceBlending = 0x00000010,
-    WGPUFeatureName_Subgroups = 0x00000011,
-    WGPUFeatureName_CoreFeaturesAndLimits = 0x00000012,
-    WGPUFeatureName_TextureFormatNV12 = 0x00000013,
-    WGPUFeatureName_TextureFormatP010 = 0x00000014,
-    WGPUFeatureName_PolygonModeLine = 0x00000015,
-    WGPUFeatureName_PolygonModePoint = 0x00000016,
+    WGPUFeatureName_TimestampQuery = 0x00000009,
+    WGPUFeatureName_IndirectFirstInstance = 0x0000000A,
+    WGPUFeatureName_ShaderF16 = 0x0000000B,
+    WGPUFeatureName_RG11B10UfloatRenderable = 0x0000000C,
+    WGPUFeatureName_BGRA8UnormStorage = 0x0000000D,
+    WGPUFeatureName_Float32Filterable = 0x0000000E,
+    WGPUFeatureName_Float32Blendable = 0x0000000F,
+    WGPUFeatureName_ClipDistances = 0x00000010,
+    WGPUFeatureName_DualSourceBlending = 0x00000011,
+    WGPUFeatureName_Subgroups = 0x00000012,
+    // WGVK-specific extensions (keep out of Dawn's standard value range)
+    WGPUFeatureName_TextureFormatNV12 = 0x00050001,
+    WGPUFeatureName_TextureFormatP010 = 0x00050002,
+    WGPUFeatureName_PolygonModeLine = 0x00050003,
+    WGPUFeatureName_PolygonModePoint = 0x00050004,
     WGPUFeatureName_Force32 = 0x7FFFFFFF
 } WGPUFeatureName;
 

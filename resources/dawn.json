@@ -2465,9 +2465,11 @@
             {"value": 16, "name": "clip distances"},
             {"value": 17, "name": "dual source blending"},
             {"value": 18, "name": "subgroups"},
-            {"value": 19, "name": "texture formats tier1"},
-            {"value": 20, "name": "texture formats tier2"},
-            {"value": 21, "name": "primitive index"},
+
+            {"value": 327681, "name": "texture format NV12", "tags": ["wgvk"]},
+            {"value": 327682, "name": "texture format P010", "tags": ["wgvk"]},
+            {"value": 327683, "name": "polygon mode line", "tags": ["wgvk"]},
+            {"value": 327684, "name": "polygon mode point", "tags": ["wgvk"]},
 
             {"value": 0, "name": "dawn internal usages", "tags": ["dawn"]},
             {"value": 1, "name": "dawn multi planar formats", "tags": ["dawn"]},
@@ -4305,7 +4307,7 @@
             {"value": 68, "name": "render pass descriptor resolve rect", "tags": ["dawn"]},
             {"value": 69, "name": "request adapter WebGPU backend options", "tags": ["dawn", "native"]},
             {"value": 70, "name": "dawn fake device initialize error for testing", "tags": ["dawn"]},
-            {"value": 71, "name": "texture component swizzle descriptor", "tags": ["dawn"]},
+            {"value": 12, "name": "texture component swizzle descriptor", "tags": ["dawn"]},
             {"value": 72, "name": "shared texture memory D3D11 begin state", "tags": ["dawn", "native"]},
             {"value": 73, "name": "dawn consume adapter descriptor", "tags": ["dawn"]},
             {"value": 74, "name": "bind group layout dynamic binding array", "tags": ["dawn"]},
