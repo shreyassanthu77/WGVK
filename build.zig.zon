@@ -11,8 +11,8 @@
             .lazy = true,
         },
         .x11_headers = .{
-            .url = "https://github.com/Batres3/x11-headers/archive/d85c0aed3f1ecc138c994ae00bb745c4cba9e574.zip",
-            .hash = "N-V-__8AAIyUQgB3B5VLoRxZ6OIasJUeaUSD3c6U2Tjhe7TZ",
+            .url = "git+https://code.hexops.org/hexops/x11-headers#ea933d71f13816b25bf8533e44e105aed8fe4ba7",
+            .hash = "N-V-__8AAIxIRwBTt3m8YLYIjDLGc2J6d1X6v2kdQRUZJQSk",
             .lazy = true,
         },
         .wayland_headers = .{
