@@ -255,10 +255,10 @@ typedef enum WGPUTextureAspect {
     WGPUTextureAspect_All         = 0x00000001,
     WGPUTextureAspect_StencilOnly = 0x00000002,
     WGPUTextureAspect_DepthOnly   = 0x00000003,
-    // Plane aspects intentionally alias Undefined/All/DepthOnly to match Dawn.
-    WGPUTextureAspect_Plane0Only  = 0x00000000,
-    WGPUTextureAspect_Plane1Only  = 0x00000001,
-    WGPUTextureAspect_Plane2Only  = 0x00000002,
+    // Dawn extension values (dawn tag block 0x0005xxxx)
+    WGPUTextureAspect_Plane0Only  = 0x00050000,
+    WGPUTextureAspect_Plane1Only  = 0x00050001,
+    WGPUTextureAspect_Plane2Only  = 0x00050002,
     WGPUTextureAspect_Force32     = 0x7FFFFFFF
 } WGPUTextureAspect;
 
@@ -383,7 +383,7 @@ typedef enum WGPULoadOp {
     WGPULoadOp_Undefined = 0x00000000,
     WGPULoadOp_Load = 0x00000001,
     WGPULoadOp_Clear = 0x00000002,
-    WGPULoadOp_ExpandResolveTexture = 0x00000003,
+    WGPULoadOp_ExpandResolveTexture = 0x00050003,
     WGPULoadOp_Force32 = 0x7FFFFFFF
 } WGPULoadOp;
 
@@ -568,13 +568,14 @@ typedef enum WGPUTextureFormat {
     WGPUTextureFormat_ASTC12x10UnormSrgb = 0x00000063,
     WGPUTextureFormat_ASTC12x12Unorm = 0x00000064,
     WGPUTextureFormat_ASTC12x12UnormSrgb = 0x00000065,
-    WGPUTextureFormat_R8BG8Biplanar420Unorm = 0x00000000,
-    WGPUTextureFormat_R10X6BG10X6Biplanar420Unorm = 0x00000001,
-    WGPUTextureFormat_R8BG8A8Triplanar420Unorm = 0x00000002,
-    WGPUTextureFormat_R8BG8Biplanar422Unorm = 0x00000003,
-    WGPUTextureFormat_R8BG8Biplanar444Unorm = 0x00000004,
-    WGPUTextureFormat_R10X6BG10X6Biplanar422Unorm = 0x00000005,
-    WGPUTextureFormat_R10X6BG10X6Biplanar444Unorm = 0x00000006,
+    // Dawn extension values (dawn tag block 0x0005xxxx)
+    WGPUTextureFormat_R8BG8Biplanar420Unorm = 0x00050000,
+    WGPUTextureFormat_R10X6BG10X6Biplanar420Unorm = 0x00050001,
+    WGPUTextureFormat_R8BG8A8Triplanar420Unorm = 0x00050002,
+    WGPUTextureFormat_R8BG8Biplanar422Unorm = 0x00050003,
+    WGPUTextureFormat_R8BG8Biplanar444Unorm = 0x00050004,
+    WGPUTextureFormat_R10X6BG10X6Biplanar422Unorm = 0x00050005,
+    WGPUTextureFormat_R10X6BG10X6Biplanar444Unorm = 0x00050006,
     WGPUTextureFormat_External = 0x0005000D,
     WGPUTextureFormat_Force32 = 0x7FFFFFFF
 } WGPUTextureFormat WGPU_ENUM_ATTRIBUTE;
