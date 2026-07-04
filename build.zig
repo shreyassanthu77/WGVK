@@ -200,8 +200,16 @@ fn buildLib1(b: *std.Build, options: WgvkOptions) !*std.Build.Step.Compile {
         .windows => {
             wgvk_mod.addCMacro("SUPPORT_WIN32_SURFACE", "1");
         },
-        .macos, .ios => {
+        .macos => {
             wgvk_mod.addCMacro("SUPPORT_METAL_SURFACE", "1");
+        },
+        .ios => {
+            wgvk_mod.addCMacro("SUPPORT_METAL_SURFACE", "1");
+            if (b.lazyDependency("xcode_frameworks", .{})) |frameworks| {
+                wgvk_mod.addSystemFrameworkPath(frameworks.path("Frameworks"));
+                wgvk_mod.addSystemIncludePath(frameworks.path("include"));
+                wgvk_mod.addLibraryPath(frameworks.path("lib"));
+            }
         },
         else => {
             const is_android = options.target.result.abi.isAndroid();
