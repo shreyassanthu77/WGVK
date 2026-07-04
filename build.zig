@@ -297,6 +297,10 @@ fn buildExample(
         .linux => {
             const is_android = options.target.result.abi.isAndroid();
             if (!is_android and options.enable_x11) {
+                if (b.lazyDependency("x11_headers", .{})) |x11| {
+                    // rgfw requires X11 headers
+                    example_exe.root_module.addIncludePath(x11.path("."));
+                }
                 example_exe.root_module.linkSystemLibrary("X11", .{});
                 example_exe.root_module.linkSystemLibrary("Xrandr", .{});
             }
