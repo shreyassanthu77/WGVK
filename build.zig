@@ -1,3 +1,59 @@
+//! # Usage
+//! The intended way to use this library is as follows:
+//! 1. Add this library to your project as a dependency.
+//!     ```bash
+//!     zig fetch --save git+https://github.com/manuel5975p/WGVK#<commit-or-tag>
+//!     ```
+//! 2. Add the following to your build.zig file:
+//!     ```zig
+//!     const wgvk = @import("WGVK"); // the name of the dependency as defined in your build.zig.zon file
+//!
+//!     pub fn build(b: *std.Build) !void {
+//!         // other build steps
+//!         const wgvk_lib = wgvk.buildLib(b, .{
+//!             .target = target,
+//!             .optimize = optimize,
+//!             // other optional features
+//!             .use_vma = use_vma, // use GPUOpen's VMA allocator (Requires and links libc++)
+//!             .support_drm = support_drm, // support Direct Rendering Infrastructure Surfaces (Linux)
+//!             .enable_x11 = enable_x11, // enable X11 support
+//!             .enable_wayland = enable_wayland, // enable Wayland support (Requires system libwayland-client. Enable on Linux only.)
+//!         });
+//!
+//!         exe.root_module.linkLibrary(wgvk_lib);
+//!     }
+//!     ```
+//!
+//! ## Cross-compiling to MacOS
+//! If you are cross-compiling to MacOS, you will need xcode_frameworks to be
+//! added to your module search path. This can be done by adding the following.
+//!
+//! > NOTE: you might need to tweak a few things depending on your setup.
+//!
+//! 1. Install xcode_frameworks
+//!     ```bash
+//!     zig fetch --save=xcode_frameworks https://code.hexops.org/hexops/xcode-frameworks
+//!     ```
+//! 2. Add the following to your build.zig file:
+//!     ```zig
+//!     fn build(b: *std.Build) !void {
+//!         // your exe + wgvk_lib build steps
+//!         if (target.result.os.tag == .macos) {
+//!             const xcode_frameworks = b.dependency("xcode_frameworks", .{});
+//!
+//!             b.addSystemFrameworkPath(xcode_frameworks.path("Frameworks"));
+//!             b.addSystemIncludePath(xcode_frameworks.path("include"));
+//!             b.addLibraryPath(xcode_frameworks.path("lib"));
+//!
+//!             exe.root_module.linkFramework("Metal", .{});
+//!             exe.root_module.linkFramework("Cocoa", .{});
+//!         }
+//!     }
+//!     ```
+//!
+//! ## Cross-compiling to Windows
+//! If you are cross-compiling to Windows, you have to use the -gnu abi.
+//! You can only use the -msvc abi from a Windows host.
 const std = @import("std");
 
 pub fn build(b: *std.Build) !void {
@@ -125,14 +181,7 @@ fn buildLib1(b: *std.Build, options: WgvkOptions) !*std.Build.Step.Compile {
             wgvk_mod.addCMacro("SUPPORT_WIN32_SURFACE", "1");
         },
         .macos, .ios => {
-            if (b.lazyDependency("xcode_frameworks", .{})) |frameworks| {
-                wgvk_mod.addSystemFrameworkPath(frameworks.path("Frameworks"));
-                wgvk_mod.addSystemIncludePath(frameworks.path("include"));
-                wgvk_mod.addLibraryPath(frameworks.path("lib"));
-            }
             wgvk_mod.addCMacro("SUPPORT_METAL_SURFACE", "1");
-            wgvk_mod.linkFramework("Metal", .{});
-            wgvk_mod.linkFramework("QuartzCore", .{});
         },
         else => {
             const is_android = options.target.result.abi.isAndroid();
@@ -192,18 +241,21 @@ fn buildExample(
     });
     example_exe.root_module.linkLibrary(wgvk_lib);
 
-    if (b.lazyDependency("glfw", .{
-        .target = options.target,
-        .optimize = options.optimize,
-        .x11 = options.enable_x11,
-        .wayland = options.enable_wayland,
-    })) |glfw| {
-        example_exe.root_module.linkLibrary(glfw.artifact("glfw"));
+    if (std.mem.eql(u8, example, "glfw_surface")) {
+        if (b.lazyDependency("glfw", .{
+            .target = options.target,
+            .optimize = options.optimize,
+            .x11 = options.enable_x11,
+            .wayland = options.enable_wayland,
+        })) |glfw| {
+            example_exe.root_module.linkLibrary(glfw.artifact("glfw"));
+        }
     }
 
     switch (options.target.result.os.tag) {
         .windows => {
             example_exe.root_module.addCMacro("SUPPORT_WIN32_SURFACE", "1");
+            example_exe.root_module.linkSystemLibrary("gdi32", .{});
         },
         .macos => {
             if (b.lazyDependency("xcode_frameworks", .{})) |frameworks| {
@@ -213,11 +265,7 @@ fn buildExample(
             }
             example_exe.root_module.addCMacro("SUPPORT_METAL_SURFACE", "1");
             example_exe.root_module.linkFramework("Metal", .{});
-            example_exe.root_module.linkFramework("QuartzCore", .{});
-            example_exe.root_module.linkFramework("CoreVideo", .{});
             example_exe.root_module.linkFramework("Cocoa", .{});
-            example_exe.root_module.linkFramework("OpenGL", .{});
-            example_exe.root_module.linkFramework("IOKit", .{});
         },
         .linux => {
             const is_android = options.target.result.abi.isAndroid();
