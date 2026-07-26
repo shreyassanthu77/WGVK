@@ -180,6 +180,13 @@ fn buildLib1(b: *std.Build, options: WgvkOptions) !*std.Build.Step.Compile {
         },
         .ios => {
             wgvk_mod.addCMacro("SUPPORT_METAL_SURFACE", "1");
+            // When the user/CI passes --sysroot (e.g. iphoneos SDK), wire it into
+            // the C module. Zig does not automatically add $sysroot/usr/include.
+            if (b.sysroot) |sysroot| {
+                wgvk_mod.addSystemIncludePath(.{ .cwd_relative = b.pathJoin(&.{ sysroot, "usr/include" }) });
+                wgvk_mod.addSystemFrameworkPath(.{ .cwd_relative = b.pathJoin(&.{ sysroot, "System/Library/Frameworks" }) });
+                wgvk_mod.addLibraryPath(.{ .cwd_relative = b.pathJoin(&.{ sysroot, "usr/lib" }) });
+            }
         },
         else => {
             const is_android = options.target.result.abi.isAndroid();
