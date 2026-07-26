@@ -33,6 +33,26 @@ jobs:
         with:
           version: 0.16.0
 
+      - name: Install Linux deps
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt update
+          sudo apt install -y libwayland-dev libx11-dev libxrandr-dev libglfw3-dev
+
+      - name: Install macOS deps
+        if: runner.os == 'macOS'
+        run: brew install glfw
+
+      - name: Install Windows GLFW
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri https://github.com/glfw/glfw/releases/download/3.4/glfw-3.4.bin.WIN64.zip -OutFile glfw.zip
+          Expand-Archive glfw.zip -DestinationPath .
+          New-Item -ItemType Directory -Force -Path glfw-prefix/include, glfw-prefix/lib | Out-Null
+          Copy-Item -Recurse glfw-3.4.bin.WIN64/include/* glfw-prefix/include/
+          Copy-Item glfw-3.4.bin.WIN64/lib-mingw-w64/* glfw-prefix/lib/
+
       # TODO: Add tests and examples
       - name: Build Lib for ${{ matrix.target }}
         run: zig build -Dtarget=${{ matrix.target }} -Doptimize=ReleaseFast --verbose
@@ -47,18 +67,19 @@ jobs:
 
       - name: Build Examples Linux
         if: runner.os == 'Linux'
-        run: |
-          sudo apt update
-          sudo apt install -y libwayland-dev libx11-dev libxrandr-dev
-          zig build -Doptimize=ReleaseFast examples --verbose
+        run: zig build -Doptimize=ReleaseFast examples --verbose
 
       - name: Build iOS Targets
         if: runner.os == 'macOS'
         run: |
-          zig build -Dtarget=aarch64-ios -Doptimize=ReleaseFast --verbose
-          zig build -Dtarget=aarch64-ios-simulator -Doptimize=ReleaseFast --verbose
-          zig build -Dtarget=x86_64-ios-simulator -Doptimize=ReleaseFast --verbose
+          zig build --sysroot "$(xcrun --sdk iphoneos --show-sdk-path)" -Dtarget=aarch64-ios -Doptimize=ReleaseFast --verbose
+          zig build --sysroot "$(xcrun --sdk iphonesimulator --show-sdk-path)" -Dtarget=aarch64-ios-simulator -Doptimize=ReleaseFast --verbose
+          zig build --sysroot "$(xcrun --sdk iphonesimulator --show-sdk-path)" -Dtarget=x86_64-ios-simulator -Doptimize=ReleaseFast --verbose
 
       - name: Build Examples (non-Linux)
-        if: runner.os != 'Linux'
+        if: runner.os == 'macOS'
         run: zig build -Doptimize=ReleaseFast examples --verbose
+
+      - name: Build Examples (Windows)
+        if: runner.os == 'Windows'
+        run: zig build --search-prefix ./glfw-prefix -Doptimize=ReleaseFast examples --verbose

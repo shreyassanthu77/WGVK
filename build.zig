@@ -238,7 +238,9 @@ fn buildExample(
     example_exe.root_module.linkLibrary(wgvk_lib);
 
     if (std.mem.eql(u8, example, "glfw_surface")) {
-        example_exe.root_module.linkSystemLibrary("glfw", .{});
+        // Linux/macOS ship libglfw; Windows prebuilts use glfw3.
+        const glfw_name = if (options.target.result.os.tag == .windows) "glfw3" else "glfw";
+        example_exe.root_module.linkSystemLibrary(glfw_name, .{});
     }
 
     switch (options.target.result.os.tag) {
