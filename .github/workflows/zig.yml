@@ -38,6 +38,13 @@ jobs:
         run: |
           sudo apt update
           sudo apt install -y libwayland-dev libx11-dev libxrandr-dev libglfw3-dev
+          # Curate a search prefix: --search-prefix /usr also exposes system
+          # vulkan/libc headers that clash with Zig + the vendored Vulkan headers.
+          mkdir -p .ci-prefix/include
+          ln -s /usr/include/X11 .ci-prefix/include/X11
+          ln -s /usr/include/GLFW .ci-prefix/include/GLFW
+          for f in /usr/include/wayland*.h; do ln -sf "$f" .ci-prefix/include/; done
+          ln -s /usr/lib/x86_64-linux-gnu .ci-prefix/lib
 
       - name: Install macOS deps
         if: runner.os == 'macOS'
@@ -56,7 +63,7 @@ jobs:
       # TODO: Add tests and examples
       - name: Build Lib for ${{ matrix.target }}
         if: runner.os == 'Linux'
-        run: zig build --search-prefix /usr -Dtarget=${{ matrix.target }} -Doptimize=ReleaseFast --verbose
+        run: zig build --search-prefix .ci-prefix -Dtarget=${{ matrix.target }} -Doptimize=ReleaseFast --verbose
 
       - name: Build Lib for ${{ matrix.target }}
         if: runner.os != 'Linux'
@@ -68,11 +75,11 @@ jobs:
 
       - name: Cross Compile
         if: runner.os == 'Linux'
-        run: zig build --search-prefix /usr -Doptimize=ReleaseFast all --verbose
+        run: zig build --search-prefix .ci-prefix -Doptimize=ReleaseFast all --verbose
 
       - name: Build Examples Linux
         if: runner.os == 'Linux'
-        run: zig build --search-prefix /usr -Doptimize=ReleaseFast examples --verbose
+        run: zig build --search-prefix .ci-prefix -Doptimize=ReleaseFast examples --verbose
 
       - name: Build iOS Targets
         if: runner.os == 'macOS'
