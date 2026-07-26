@@ -37,14 +37,21 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt update
-          sudo apt install -y libwayland-dev libx11-dev libxrandr-dev libglfw3-dev
+          # Xcursor for RGFW; Xi/Xinerama/xkbcommon for building GLFW 3.4.
+          # Ubuntu's libglfw3-dev is 3.3.x (no glfwGetPlatform); match Windows CI on 3.4.
+          sudo apt install -y libwayland-dev libx11-dev libxrandr-dev libxcursor-dev \
+            libxinerama-dev libxi-dev libxkbcommon-dev
+          git clone --depth 1 --branch 3.4 https://github.com/glfw/glfw.git
+          cmake -S glfw -B glfw-build \
+            -DGLFW_BUILD_EXAMPLES=OFF -DGLFW_BUILD_TESTS=OFF -DGLFW_BUILD_DOCS=OFF \
+            -DBUILD_SHARED_LIBS=ON \
+            -DCMAKE_INSTALL_PREFIX="$PWD/.ci-prefix"
+          cmake --build glfw-build --target install -j"$(nproc)"
           # Curate a search prefix: --search-prefix /usr also exposes system
           # vulkan/libc headers that clash with Zig + the vendored Vulkan headers.
-          mkdir -p .ci-prefix/include
-          ln -s /usr/include/X11 .ci-prefix/include/X11
-          ln -s /usr/include/GLFW .ci-prefix/include/GLFW
+          # GLFW 3.4 is already installed into .ci-prefix; only symlink X11/Wayland.
+          ln -sfn /usr/include/X11 .ci-prefix/include/X11
           for f in /usr/include/wayland*.h; do ln -sf "$f" .ci-prefix/include/; done
-          ln -s /usr/lib/x86_64-linux-gnu .ci-prefix/lib
 
       - name: Install macOS deps
         if: runner.os == 'macOS'
