@@ -46,31 +46,6 @@
 //!         exe.root_module.linkLibrary(wgvk_lib);
 //!     }
 //!     ```
-//!
-//! ## Cross-compiling to MacOS
-//! If you are cross-compiling to MacOS, you will need xcode_frameworks to be
-//! added to your module search path. This can be done by adding the following.
-//!
-//! > NOTE: you might need to tweak a few things depending on your setup.
-//!
-//! 1. Install xcode_frameworks
-//!     ```bash
-//!     zig fetch --save=xcode_frameworks https://code.hexops.org/hexops/xcode-frameworks
-//!     ```
-//! 2. Add the following to your build.zig file:
-//!     ```zig
-//!     fn build(b: *std.Build) !void {
-//!         // your exe + wgvk_lib build steps
-//!         if (target.result.os.tag == .macos) {
-//!             // put this block next to the macos configuration in the previous step
-//!             const xcode_frameworks = b.dependency("xcode_frameworks", .{});
-//!
-//!             b.addSystemFrameworkPath(xcode_frameworks.path("Frameworks"));
-//!             b.addSystemIncludePath(xcode_frameworks.path("include"));
-//!             b.addLibraryPath(xcode_frameworks.path("lib"));
-//!         }
-//!     }
-//!     ```
 const std = @import("std");
 
 pub fn build(b: *std.Build) !void {
@@ -205,11 +180,6 @@ fn buildLib1(b: *std.Build, options: WgvkOptions) !*std.Build.Step.Compile {
         },
         .ios => {
             wgvk_mod.addCMacro("SUPPORT_METAL_SURFACE", "1");
-            if (b.lazyDependency("xcode_frameworks", .{})) |frameworks| {
-                wgvk_mod.addSystemFrameworkPath(frameworks.path("Frameworks"));
-                wgvk_mod.addSystemIncludePath(frameworks.path("include"));
-                wgvk_mod.addLibraryPath(frameworks.path("lib"));
-            }
         },
         else => {
             const is_android = options.target.result.abi.isAndroid();
@@ -217,14 +187,12 @@ fn buildLib1(b: *std.Build, options: WgvkOptions) !*std.Build.Step.Compile {
                 wgvk_mod.addCMacro("SUPPORT_DRM_SURFACE", "1");
             }
 
-            if (!is_android and options.enable_x11) if (b.lazyDependency("x11_headers", .{})) |x11| {
+            if (!is_android and options.enable_x11) {
                 wgvk_mod.addCMacro("SUPPORT_XLIB_SURFACE", "1");
-                wgvk_mod.addIncludePath(x11.path("."));
-            };
-            if (options.enable_wayland) if (b.lazyDependency("wayland_headers", .{})) |wayland| {
+            }
+            if (!is_android and options.enable_wayland) {
                 wgvk_mod.addCMacro("SUPPORT_WAYLAND_SURFACE", "1");
-                wgvk_mod.addIncludePath(wayland.path("wayland"));
-            };
+            }
         },
     }
 
@@ -270,14 +238,7 @@ fn buildExample(
     example_exe.root_module.linkLibrary(wgvk_lib);
 
     if (std.mem.eql(u8, example, "glfw_surface")) {
-        if (b.lazyDependency("glfw", .{
-            .target = options.target,
-            .optimize = options.optimize,
-            .x11 = options.enable_x11,
-            .wayland = options.enable_wayland,
-        })) |glfw| {
-            example_exe.root_module.linkLibrary(glfw.artifact("glfw"));
-        }
+        example_exe.root_module.linkSystemLibrary("glfw", .{});
     }
 
     switch (options.target.result.os.tag) {
@@ -285,11 +246,6 @@ fn buildExample(
             example_exe.root_module.linkSystemLibrary("gdi32", .{});
         },
         .macos => {
-            if (b.lazyDependency("xcode_frameworks", .{})) |frameworks| {
-                example_exe.root_module.addSystemFrameworkPath(frameworks.path("Frameworks"));
-                example_exe.root_module.addSystemIncludePath(frameworks.path("include"));
-                example_exe.root_module.addLibraryPath(frameworks.path("lib"));
-            }
             example_exe.root_module.linkFramework("Foundation", .{});
             example_exe.root_module.linkFramework("Metal", .{});
             example_exe.root_module.linkFramework("Cocoa", .{});
@@ -297,10 +253,6 @@ fn buildExample(
         .linux => {
             const is_android = options.target.result.abi.isAndroid();
             if (!is_android and options.enable_x11) {
-                if (b.lazyDependency("x11_headers", .{})) |x11| {
-                    // rgfw requires X11 headers
-                    example_exe.root_module.addIncludePath(x11.path("."));
-                }
                 example_exe.root_module.linkSystemLibrary("X11", .{});
                 example_exe.root_module.linkSystemLibrary("Xrandr", .{});
             }
